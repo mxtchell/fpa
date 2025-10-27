@@ -763,7 +763,7 @@ class FPAVarianceAnalysis:
         # Query actuals
         actuals_query = f"""
         SELECT *
-        FROM dataset
+        FROM read_csv('gartner.csv')
         WHERE scenario = 'actuals'
         AND period = '{self.period}'
         {filter_clause}
@@ -780,7 +780,7 @@ class FPAVarianceAnalysis:
         # Query comparison data
         comparison_query = f"""
         SELECT *
-        FROM dataset
+        FROM read_csv('gartner.csv')
         WHERE scenario = '{comparison_scenario}'
         AND period = '{self.period}'
         {filter_clause}
@@ -1147,18 +1147,17 @@ def metric_drivers(parameters: SkillInput):
 
     # Get AnswerRocketClient
     try:
+        from answer_rocket import AnswerRocketClient
         from ar_analytics import ArUtils
+
+        client = AnswerRocketClient()
         ar_utils = ArUtils()
-        client = ar_utils.sp
     except Exception as e:
         logger.error(f"Failed to initialize AnswerRocketClient: {e}")
-        # Create mock client for testing
-        client = SimpleNamespace(
-            data=SimpleNamespace(
-                execute_sql_query=lambda database_id, sql_query, row_limit=None: pd.DataFrame()
-            )
+        return SkillOutput(
+            final_prompt=f"Failed to initialize client: {str(e)}",
+            warnings=[str(e)]
         )
-        ar_utils = None
 
     # Run analysis
     analysis = FPAVarianceAnalysis(
@@ -1238,11 +1237,5 @@ def metric_drivers(parameters: SkillInput):
         narrative=insights,
         visualizations=viz_list,
         parameter_display_descriptions=param_info,
-        followup_questions=[
-            f"Which {breakout_dimensions[0] if breakout_dimensions else 'dimensions'} had the highest variance?",
-            "What drove the price impact?",
-            "How does volume variance compare across regions?",
-            f"Show me variance trends over time vs {comparison_type.lower()}"
-        ],
         export_data=[ExportData(name=name, data=df) for name, df in export_data.items()]
     )
