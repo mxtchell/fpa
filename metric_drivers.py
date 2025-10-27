@@ -912,25 +912,93 @@ class FPAVarianceAnalysis:
         }
 
     def get_summary_table(self):
-        """Create driver analysis table with Current Period, Compare Period, Change columns"""
+        """Create driver analysis table with Current Period, Compare Period, Change columns
+
+        Hardcoded metrics to display:
+        - gross_revenue (main metric)
+        - brand_contribution_margin
+        - brand_contribution_margin (%)
+        - gross_profit
+        - net_revenue
+        - price
+        - units_carton
+        """
         if not self.pvm_results:
             return None
 
-        # Calculate variance amount and percentage
-        variance_amount = self.pvm_results['total_variance']
-        variance_pct = (variance_amount / self.pvm_results['starting_value'] * 100) if self.pvm_results['starting_value'] != 0 else 0
-
-        # Create driver analysis table format
-        data = [
-            [
-                format_number(self.pvm_results['ending_value']),      # Current Period (Actuals)
-                format_number(self.pvm_results['starting_value']),    # Compare Period (Budget/Forecast)
-                format_number(variance_amount),                        # Change ($)
-                f"{variance_pct:.1f}%"                                # Change (%)
-            ]
+        # Hardcoded metrics to show in table
+        metrics_to_show = [
+            ('Gross Revenue', 'gross_revenue', True),  # (Display Name, Column Name, Is Currency)
+            ('  Brand Contribution Margin', 'brand_contribution_margin', True),
+            ('  Brand Contribution Margin %', 'brand_contribution_margin', False),  # Will calculate percentage
+            ('  Gross Profit', 'gross_profit', True),
+            ('  Net Revenue', 'net_revenue', True),
+            ('  Price', 'price', True),
+            ('  Units (Carton)', 'units_carton', False)
         ]
 
+        data = []
+
+        for display_name, metric_col, is_currency in metrics_to_show:
+            # Get actual and comparison values for this metric
+            if metric_col in self.actuals_df.columns and metric_col in self.comparison_df.columns:
+                actual_value = self.actuals_df[metric_col].sum()
+                comparison_value = self.comparison_df[metric_col].sum()
+
+                # For Brand Contribution Margin %, calculate percentage of gross revenue
+                if display_name == '  Brand Contribution Margin %':
+                    actual_gross_rev = self.actuals_df['gross_revenue'].sum()
+                    comparison_gross_rev = self.comparison_df['gross_revenue'].sum()
+
+                    if actual_gross_rev != 0 and comparison_gross_rev != 0:
+                        actual_value = (actual_value / actual_gross_rev) * 100
+                        comparison_value = (comparison_value / comparison_gross_rev) * 100
+
+                        variance_amount = actual_value - comparison_value
+                        variance_pct_display = f"{variance_amount:+.1f} pts" if variance_amount != 0 else "0.0 pts"
+
+                        data.append([
+                            display_name,
+                            f"{actual_value:.1f}%",
+                            f"{comparison_value:.1f}%",
+                            variance_pct_display,
+                            variance_pct_display
+                        ])
+                    continue
+
+                # Calculate variance
+                variance_amount = actual_value - comparison_value
+                variance_pct = (variance_amount / comparison_value * 100) if comparison_value != 0 else 0
+
+                # Format values
+                if is_currency:
+                    actual_formatted = format_number(actual_value)
+                    comparison_formatted = format_number(comparison_value)
+                    variance_formatted = format_number(variance_amount)
+                else:
+                    actual_formatted = f"{actual_value:,.0f}"
+                    comparison_formatted = f"{comparison_value:,.0f}"
+                    variance_formatted = f"{variance_amount:+,.0f}"
+
+                data.append([
+                    display_name,
+                    actual_formatted,
+                    comparison_formatted,
+                    variance_formatted,
+                    f"{variance_pct:+.1f}%"
+                ])
+            else:
+                # Metric not available in data
+                data.append([
+                    display_name,
+                    "N/A",
+                    "N/A",
+                    "N/A",
+                    "N/A"
+                ])
+
         columns = [
+            {'name': ''},
             {'name': 'Current Period'},
             {'name': f'{self.comparison_type}'},
             {'name': 'Change ($)'},
@@ -1052,7 +1120,10 @@ def metric_drivers(parameters: SkillInput):
     metric = getattr(parameters.arguments, 'metric', None)
     period = getattr(parameters.arguments, 'period', None)
     comparison_type = getattr(parameters.arguments, 'comparison_type', 'Budget')
-    breakout_dimensions = getattr(parameters.arguments, 'breakout_dimensions', [])
+
+    # HARDCODED: Always show these 5 breakout dimensions
+    breakout_dimensions = ['category', 'region_l2', 'country', 'customer_type', 'market_type_1']
+
     top_n = getattr(parameters.arguments, 'top_n', 10)
     other_filters = getattr(parameters.arguments, 'other_filters', [])
     max_prompt = getattr(parameters.arguments, 'max_prompt', DEFAULT_MAX_PROMPT)
@@ -1150,7 +1221,7 @@ def metric_drivers(parameters: SkillInput):
 
         rendered = wire_layout(json.loads(WATERFALL_CHART_LAYOUT), layout_vars)
         viz_list.append(SkillVisualization(title="Price-Volume-Mix Analysis", layout=rendered))
-        export_data["PVM_Summary"] = pd.DataFrame(summary_table['data'], columns=['Current Period', comparison_type, 'Change ($)', 'Change (%)'])
+        export_data["PVM_Summary"] = pd.DataFrame(summary_table['data'], columns=['', 'Current Period', comparison_type, 'Change ($)', 'Change (%)'])
     else:
         logger.error(f"Missing waterfall data or summary table - waterfall: {waterfall_data is not None}, table: {summary_table is not None}")
 
