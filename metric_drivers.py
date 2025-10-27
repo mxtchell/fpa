@@ -604,11 +604,13 @@ class FPAVarianceAnalysis:
         self.facts = []
 
     def get_comparison_scenario(self):
-        """Map comparison type to scenario value"""
+        """Map comparison type to scenario value
+
+        Note: Prior Period doesn't use a scenario, it uses date math
+        """
         mapping = {
             'Budget': 'budget',
-            'Forecast': 'forecast',
-            'Prior Period': 'prior_period'
+            'Forecast': 'forecast'
         }
         return mapping.get(self.comparison_type, 'budget')
 
@@ -685,7 +687,6 @@ class FPAVarianceAnalysis:
         logger.info(f"Querying data for metric: {self.metric}, period: {self.period}")
 
         filter_clause = self.build_filter_clause()
-        comparison_scenario = self.get_comparison_scenario()
 
         # Parse period to date range
         start_date, end_date = self.parse_period_to_date_range(self.period)
@@ -708,14 +709,36 @@ class FPAVarianceAnalysis:
         )
         self.actuals_df = result.df if hasattr(result, 'df') else None
 
-        # Query comparison data
-        comparison_query = f"""
-        SELECT *
-        FROM read_csv('gartner.csv')
-        WHERE scenario = '{comparison_scenario}'
-        AND end_date BETWEEN '{start_date}' AND '{end_date}'
-        {filter_clause}
-        """
+        # Query comparison data - handle Prior Period differently
+        if self.comparison_type == 'Prior Period':
+            # Calculate prior year dates (go back 12 months)
+            from dateutil.relativedelta import relativedelta
+            from datetime import datetime
+
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+
+            prior_start = (start_dt - relativedelta(years=1)).strftime('%Y-%m-%d')
+            prior_end = (end_dt - relativedelta(years=1)).strftime('%Y-%m-%d')
+
+            comparison_query = f"""
+            SELECT *
+            FROM read_csv('gartner.csv')
+            WHERE scenario = 'actuals'
+            AND end_date BETWEEN '{prior_start}' AND '{prior_end}'
+            {filter_clause}
+            """
+            logger.info(f"Prior Period query (LY): {prior_start} to {prior_end}")
+        else:
+            # Budget or Forecast
+            comparison_scenario = self.get_comparison_scenario()
+            comparison_query = f"""
+            SELECT *
+            FROM read_csv('gartner.csv')
+            WHERE scenario = '{comparison_scenario}'
+            AND end_date BETWEEN '{start_date}' AND '{end_date}'
+            {filter_clause}
+            """
 
         logger.info(f"Comparison query: {comparison_query}")
         result = self.client.data.execute_sql_query(
@@ -730,10 +753,9 @@ class FPAVarianceAnalysis:
 
         # Check if we got any comparison data
         if self.comparison_df is None or self.comparison_df.empty:
-            logger.error(f"No {comparison_scenario} data found for period {self.period} ({start_date} to {end_date})")
-            logger.error("Please check: (1) scenario column has value '{comparison_scenario}', (2) end_date has data in this range")
-            # Return empty dataframes to prevent division by zero
-            raise ValueError(f"No {comparison_scenario} data available for period {self.period}")
+            comparison_label = "prior year actuals" if self.comparison_type == 'Prior Period' else f"{self.get_comparison_scenario()} data"
+            logger.error(f"No {comparison_label} found for period {self.period} ({start_date} to {end_date})")
+            raise ValueError(f"No {comparison_label} available for period {self.period}")
 
     def calculate_price_volume_mix(self):
         """
@@ -750,14 +772,20 @@ class FPAVarianceAnalysis:
             logger.error("Data not loaded. Call query_data() first.")
             return None
 
+        # Use units_carton as volume measure (dataset has units_carton, not volume)
+        volume_col = 'units_carton' if 'units_carton' in self.actuals_df.columns else 'volume'
+
         # Aggregate to get totals
         actual_revenue = self.actuals_df[self.metric].sum()
-        actual_volume = self.actuals_df['volume'].sum() if 'volume' in self.actuals_df.columns else 0
+        actual_volume = self.actuals_df[volume_col].sum() if volume_col in self.actuals_df.columns else 0
         actual_price = actual_revenue / actual_volume if actual_volume > 0 else 0
 
         comparison_revenue = self.comparison_df[self.metric].sum()
-        comparison_volume = self.comparison_df['volume'].sum() if 'volume' in self.comparison_df.columns else 0
+        comparison_volume = self.comparison_df[volume_col].sum() if volume_col in self.comparison_df.columns else 0
         comparison_price = comparison_revenue / comparison_volume if comparison_volume > 0 else 0
+
+        logger.info(f"Actual: revenue={actual_revenue:,.0f}, volume={actual_volume:,.0f}, price={actual_price:.2f}")
+        logger.info(f"Comparison: revenue={comparison_revenue:,.0f}, volume={comparison_volume:,.0f}, price={comparison_price:.2f}")
 
         # Calculate impacts
         volume_impact = (actual_volume - comparison_volume) * comparison_price
@@ -837,35 +865,88 @@ class FPAVarianceAnalysis:
         return top_n_df
 
     def create_waterfall_chart_data(self):
-        """Create Highcharts waterfall chart configuration"""
+        """Create Highcharts waterfall chart configuration with pretty formatting"""
         if not self.pvm_results:
             return None
 
         categories = [
             f"{self.comparison_type}",
-            "Volume Impact",
-            "Price Impact",
-            "Mix Impact",
+            "Volume",
+            "Price",
+            "Mix",
             "Actuals"
         ]
 
-        # Waterfall charts need simple numeric data
-        # First value is the starting point, middle values are changes, last is sum
+        metric_display = format_display_name(self.metric)
+
+        # Format values in millions for display
+        def format_millions(value):
+            return f"${value / 1_000_000:.2f}M"
+
+        # Determine colors: green for positive, red for negative, blue for totals
+        def get_color(value):
+            if value >= 0:
+                return '#4ade80'  # Green for positive
+            else:
+                return '#ef4444'  # Red for negative
+
+        volume_val = int(self.pvm_results['volume_impact'])
+        price_val = int(self.pvm_results['price_impact'])
+        mix_val = int(self.pvm_results['mix_impact'])
+
+        # Waterfall chart data with colors and formatted labels
         data_series = [{
-            'name': self.metric,
+            'name': metric_display,
             'data': [
-                int(self.pvm_results['starting_value']),  # Starting value
-                int(self.pvm_results['volume_impact']),   # Change
-                int(self.pvm_results['price_impact']),    # Change
-                int(self.pvm_results['mix_impact']),      # Change
+                {
+                    'y': int(self.pvm_results['starting_value']),
+                    'color': '#3b82f6',  # Blue for starting value
+                    'dataLabels': {
+                        'enabled': True,
+                        'format': format_millions(self.pvm_results['starting_value'])
+                    }
+                },
+                {
+                    'y': volume_val,
+                    'color': get_color(volume_val),
+                    'dataLabels': {
+                        'enabled': True,
+                        'format': format_millions(volume_val)
+                    }
+                },
+                {
+                    'y': price_val,
+                    'color': get_color(price_val),
+                    'dataLabels': {
+                        'enabled': True,
+                        'format': format_millions(price_val)
+                    }
+                },
+                {
+                    'y': mix_val,
+                    'color': get_color(mix_val),
+                    'dataLabels': {
+                        'enabled': True,
+                        'format': format_millions(mix_val)
+                    }
+                },
                 {
                     'isSum': True,
-                    'y': int(self.pvm_results['ending_value'])  # Ending sum
+                    'y': int(self.pvm_results['ending_value']),
+                    'color': '#3b82f6',  # Blue for ending value
+                    'dataLabels': {
+                        'enabled': True,
+                        'format': format_millions(self.pvm_results['ending_value'])
+                    }
                 }
             ],
             'dataLabels': {
                 'enabled': True,
-                'format': '${point.y:,.0f}'
+                'style': {
+                    'fontWeight': 'bold',
+                    'color': '#ffffff',
+                    'textOutline': 'none'
+                }
             }
         }]
 
@@ -873,10 +954,11 @@ class FPAVarianceAnalysis:
             'chart_categories': categories,
             'chart_data': data_series,
             'chart_y_axis': {
-                'title': {'text': self.metric},
-                'labels': {'format': '${value:,.0f}'}
+                'title': {'text': metric_display},
+                'labels': {'format': '${value:,.2f}M'},
+                'tickInterval': None  # Auto calculate
             },
-            'chart_title': f'Price-Volume-Mix Analysis: {self.metric}'
+            'chart_title': ''
         }
 
     def create_horizontal_bar_chart_data(self, dimension):
