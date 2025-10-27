@@ -206,39 +206,6 @@ WATERFALL_CHART_LAYOUT = """
                         "vertical-align": "middle"
                     }
                 }
-            },
-            {
-                "name": "CardContainer1",
-                "type": "FlexContainer",
-                "children": "",
-                "direction": "column",
-                "minHeight": "",
-                "maxHeight": "",
-                "style": {
-                    "borderRadius": "11.911px",
-                    "background": "var(--White, #FFF)",
-                    "box-shadow": "0px 0px 8.785px 0px rgba(0, 0, 0, 0.10) inset",
-                    "padding": "10px",
-                    "fontFamily": "Arial",
-                    "marginTop": "20px"
-                },
-                "flexDirection": "row",
-                "hidden": false
-            },
-            {
-                "name": "Markdown0",
-                "type": "Markdown",
-                "children": "",
-                "text": "insights",
-                "style": {
-                    "color": "#555",
-                    "backgroundColor": "#ffffff",
-                    "border": "null",
-                    "fontSize": "15px"
-                },
-                "parentId": "CardContainer1",
-                "flex": "",
-                "hidden": false
             }
         ]
     },
@@ -581,6 +548,40 @@ def format_number(value, is_currency=True, decimals=1):
         formatted = f"${formatted}"
 
     return formatted
+
+
+def format_display_name(name):
+    """
+    Format technical names to display names
+    Examples:
+        gross_revenue -> Gross Revenue
+        region_l2 -> Region L2
+        customer_type -> Customer Type
+        market_type_1 -> Market Type 1
+    """
+    if not name:
+        return name
+
+    # Handle special cases
+    special_cases = {
+        'region_l1': 'Region L1',
+        'region_l2': 'Region L2',
+        'market_type_1': 'Market Type 1',
+        'customer_type': 'Customer Type',
+        'gross_revenue': 'Gross Revenue',
+        'net_revenue': 'Net Revenue',
+        'gross_profit': 'Gross Profit',
+        'brand_contribution_margin': 'Brand Contribution Margin',
+        'units_carton': 'Units (Carton)',
+        'end_date': 'End Date',
+        'start_date': 'Start Date',
+    }
+
+    if name.lower() in special_cases:
+        return special_cases[name.lower()]
+
+    # Default: replace underscores with spaces and title case
+    return name.replace('_', ' ').title()
 
 
 class FPAVarianceAnalysis:
@@ -1207,8 +1208,9 @@ def metric_drivers(parameters: SkillInput):
     logger.info(f"Summary table: {summary_table}")
 
     if waterfall_data and summary_table:
+        metric_display = format_display_name(metric)
         general_vars = {
-            "headline": f"{metric} Variance Analysis",
+            "headline": f"{metric_display} Variance Analysis",
             "sub_headline": f"{period} | Actuals vs {comparison_type}",
             "exec_summary": insights
         }
@@ -1220,7 +1222,7 @@ def metric_drivers(parameters: SkillInput):
         logger.info(f"Table data sample: {layout_vars.get('data', 'MISSING')}")
 
         rendered = wire_layout(json.loads(WATERFALL_CHART_LAYOUT), layout_vars)
-        viz_list.append(SkillVisualization(title="Price-Volume-Mix Analysis", layout=rendered))
+        viz_list.append(SkillVisualization(title=f"{metric_display} Analysis", layout=rendered))
         export_data["PVM_Summary"] = pd.DataFrame(summary_table['data'], columns=['', 'Current Period', comparison_type, 'Change ($)', 'Change (%)'])
     else:
         logger.error(f"Missing waterfall data or summary table - waterfall: {waterfall_data is not None}, table: {summary_table is not None}")
@@ -1231,23 +1233,39 @@ def metric_drivers(parameters: SkillInput):
         table_data = analysis.get_breakout_table(dimension)
 
         if bar_data and table_data:
+            dimension_display = format_display_name(dimension)
             general_vars = {
-                "headline": f"{dimension} Breakout",
+                "headline": f"{dimension_display} Breakout",
                 "sub_headline": f"Top {top_n} Contributors to Variance"
             }
 
             layout_vars = {**general_vars, **bar_data, **table_data}
             rendered = wire_layout(json.loads(HORIZONTAL_BAR_LAYOUT), layout_vars)
-            viz_list.append(SkillVisualization(title=f"{dimension} Analysis", layout=rendered))
+            viz_list.append(SkillVisualization(title=dimension_display, layout=rendered))
             export_data[f"{dimension}_Variance"] = analysis.breakout_results[dimension]
 
     # Create parameter display
+    metric_display = format_display_name(metric)
+    dimensions_display = ", ".join([format_display_name(d) for d in breakout_dimensions]) if breakout_dimensions else "None"
+
     param_info = [
-        ParameterDisplayDescription(key="Metric", value=metric),
+        ParameterDisplayDescription(key="Metric", value=metric_display),
         ParameterDisplayDescription(key="Period", value=period),
         ParameterDisplayDescription(key="Comparison", value=comparison_type),
-        ParameterDisplayDescription(key="Dimensions", value=", ".join(breakout_dimensions) if breakout_dimensions else "None")
+        ParameterDisplayDescription(key="Dimensions", value=dimensions_display)
     ]
+
+    # Add any user-specified filters to parameter display
+    if other_filters:
+        filter_descriptions = []
+        for f in other_filters:
+            dim = format_display_name(f.get('dim', ''))
+            op = f.get('op', '=')
+            val = f.get('val', '')
+            filter_descriptions.append(f"{dim} {op} {val}")
+        param_info.append(
+            ParameterDisplayDescription(key="Filters", value="; ".join(filter_descriptions))
+        )
 
     return SkillOutput(
         final_prompt=max_response_prompt,
