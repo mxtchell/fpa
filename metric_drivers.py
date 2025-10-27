@@ -988,10 +988,10 @@ class FPAVarianceAnalysis:
                 }
             ],
             'chart_y_axis': {
-                'title': {'text': self.metric},
+                'title': {'text': format_display_name(self.metric)},
                 'labels': {'format': '${value:,.0f}'}
             },
-            'chart_title': f'{dimension} Variance Analysis'
+            'chart_title': f'{format_display_name(dimension)} Variance Analysis'
         }
 
     def get_summary_table(self):
