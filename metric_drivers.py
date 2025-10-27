@@ -770,10 +770,12 @@ class FPAVarianceAnalysis:
         """
 
         logger.info(f"Actuals query: {actuals_query}")
-        self.actuals_df = self.client.data.execute_sql_query(
+        result = self.client.data.execute_sql_query(
             database_id=DATABASE_ID,
-            query=actuals_query
+            sql_query=actuals_query,
+            row_limit=10000
         )
+        self.actuals_df = result.df if hasattr(result, 'df') else None
 
         # Query comparison data
         comparison_query = f"""
@@ -785,10 +787,12 @@ class FPAVarianceAnalysis:
         """
 
         logger.info(f"Comparison query: {comparison_query}")
-        self.comparison_df = self.client.data.execute_sql_query(
+        result = self.client.data.execute_sql_query(
             database_id=DATABASE_ID,
-            query=comparison_query
+            sql_query=comparison_query,
+            row_limit=10000
         )
+        self.comparison_df = result.df if hasattr(result, 'df') else None
 
         logger.info(f"Actuals shape: {self.actuals_df.shape if self.actuals_df is not None else 'None'}")
         logger.info(f"Comparison shape: {self.comparison_df.shape if self.comparison_df is not None else 'None'}")
@@ -1071,35 +1075,10 @@ class FPAVarianceAnalysis:
     name="FP&A Drivers",
     llm_name="Metric Drivers with Price-Volume-Mix Decomposition",
     description="Analyze variance drivers using Price-Volume-Mix decomposition with waterfall charts and dimensional breakouts. Compare actuals vs Budget, Forecast, or Prior Period.",
-    capabilities=[
-        "Price-Volume-Mix variance decomposition",
-        "Waterfall chart visualization of variance components",
-        "Dimensional breakout analysis with horizontal bar charts",
-        "Top contributor identification and ranking",
-        "Multi-dimensional variance attribution",
-        "Comparison vs Budget, Forecast, or Prior Period"
-    ],
-    limitations=[
-        "Requires 'scenario' column in dataset with values: actuals, budget, forecast",
-        "Requires 'volume' column for accurate PVM decomposition",
-        "Limited to configured metrics and dimensions",
-        "Maximum 10 dimensions for breakout analysis"
-    ],
-    example_questions=[
-        "What are the revenue drivers for Q3 2024 vs budget?",
-        "Show me price-volume-mix analysis for sales vs forecast",
-        "Which regions contributed most to the revenue variance?",
-        "Analyze variance drivers by category and customer type",
-        "What caused the variance in Q4 vs prior period?"
-    ],
-    parameter_guidance={
-        "metric": "Select the metric to analyze (e.g., Revenue, Profit, Units)",
-        "period": "Time period for analysis (e.g., Q3 2024, 2024, Jan 2024)",
-        "comparison_type": "Choose Budget, Forecast, or Prior Period for comparison",
-        "breakout_dimensions": "Select dimensions for detailed breakout (e.g., Region, Category, Customer)",
-        "top_n": "Number of top contributors to display (default 10)",
-        "other_filters": "Additional filters to apply (e.g., Region = North, Product = Electronics)"
-    },
+    capabilities="Price-Volume-Mix variance decomposition. Waterfall chart visualization of variance components. Dimensional breakout analysis with horizontal bar charts. Top contributor identification and ranking. Multi-dimensional variance attribution. Comparison vs Budget, Forecast, or Prior Period.",
+    limitations="Requires 'scenario' column in dataset with values: actuals, budget, forecast. Requires 'volume' column for accurate PVM decomposition. Limited to configured metrics and dimensions.",
+    example_questions="What are the revenue drivers for Q3 2024 vs budget? Show me price-volume-mix analysis for sales vs forecast. Which regions contributed most to the revenue variance? Analyze variance drivers by category and customer type. What caused the variance in Q4 vs prior period?",
+    parameter_guidance="Select the metric to analyze (e.g., Revenue, Profit, Units). Choose the time period for analysis (e.g., Q3 2024, 2024, Jan 2024). Choose Budget, Forecast, or Prior Period for comparison. Select dimensions for detailed breakout (e.g., Region, Category, Customer). Specify number of top contributors to display (default 10). Add additional filters as needed (e.g., Region = North, Product = Electronics).",
     parameters=[
         SkillParameter(
             name="metric",
@@ -1176,9 +1155,10 @@ def metric_drivers(parameters: SkillInput):
         # Create mock client for testing
         client = SimpleNamespace(
             data=SimpleNamespace(
-                execute_sql_query=lambda database_id, query: pd.DataFrame()
+                execute_sql_query=lambda database_id, sql_query, row_limit=None: pd.DataFrame()
             )
         )
+        ar_utils = None
 
     # Run analysis
     analysis = FPAVarianceAnalysis(
@@ -1199,7 +1179,10 @@ def metric_drivers(parameters: SkillInput):
     max_response_prompt = jinja2.Template(max_prompt).render(facts=[facts_list])
 
     try:
-        insights = ar_utils.get_llm_response(insight_template)
+        if ar_utils:
+            insights = ar_utils.get_llm_response(insight_template)
+        else:
+            insights = "Variance analysis complete. Review the waterfall chart and dimensional breakouts for detailed insights."
     except:
         insights = "Variance analysis complete. Review the waterfall chart and dimensional breakouts for detailed insights."
 
