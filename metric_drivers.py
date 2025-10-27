@@ -1139,7 +1139,7 @@ def metric_drivers(parameters: SkillInput):
 
         rendered = wire_layout(json.loads(WATERFALL_CHART_LAYOUT), layout_vars)
         viz_list.append(SkillVisualization(title="Price-Volume-Mix Analysis", layout=rendered))
-        export_data["PVM_Summary"] = pd.DataFrame(summary_table['data'], columns=['Component', 'Value'])
+        export_data["PVM_Summary"] = pd.DataFrame(summary_table['data'], columns=['Current Period', comparison_type, 'Change ($)', 'Change (%)'])
     else:
         logger.error(f"Missing waterfall data or summary table - waterfall: {waterfall_data is not None}, table: {summary_table is not None}")
 
