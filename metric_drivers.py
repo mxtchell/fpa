@@ -956,9 +956,12 @@ class FPAVarianceAnalysis:
 
         metric_display = format_display_name(self.metric)
 
-        # Format values in millions for display
+        # Format values - millions for large values, thousands for Mix
         def format_millions(value):
             return f"${value / 1_000_000:.2f}M"
+
+        def format_thousands(value):
+            return f"${value / 1_000:.1f}K"
 
         # Determine colors: green for positive, red for negative, blue for totals
         def get_color(value):
@@ -971,11 +974,11 @@ class FPAVarianceAnalysis:
         price_val = int(self.pvm_results['price_impact'])
         mix_val = int(self.pvm_results['mix_impact'])
 
-        # Convert values to millions for cleaner display
+        # Convert values to millions for cleaner display (except Mix in thousands)
         starting_m = self.pvm_results['starting_value'] / 1_000_000
         volume_m = volume_val / 1_000_000
         price_m = price_val / 1_000_000
-        mix_m = mix_val / 1_000_000
+        mix_m = mix_val / 1_000_000  # Still in millions for chart Y axis consistency
         ending_m = self.pvm_results['ending_value'] / 1_000_000
 
         # Waterfall chart data with colors and formatted labels
@@ -1015,7 +1018,7 @@ class FPAVarianceAnalysis:
                     'color': get_color(mix_val),
                     'dataLabels': {
                         'enabled': True,
-                        'format': format_millions(mix_val)
+                        'format': format_thousands(mix_val)  # Format Mix in thousands
                     }
                 },
                 {
@@ -1042,12 +1045,15 @@ class FPAVarianceAnalysis:
             }
         }]
 
+        # Smart Y-axis: don't start at 0, let Highcharts calculate based on data range
         return {
             'chart_categories': categories,
             'chart_data': data_series,
             'chart_y_axis': {
                 'title': {'text': metric_display},
-                'labels': {'format': '${value:,.0f}M'}
+                'labels': {'format': '${value:,.0f}M'},
+                'startOnTick': False,  # Don't force start at tick
+                'endOnTick': False     # Don't force end at tick
             },
             'chart_title': ''
         }
