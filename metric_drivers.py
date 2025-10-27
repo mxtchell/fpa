@@ -909,12 +909,19 @@ class FPAVarianceAnalysis:
         price_val = int(self.pvm_results['price_impact'])
         mix_val = int(self.pvm_results['mix_impact'])
 
+        # Convert values to millions for cleaner display
+        starting_m = self.pvm_results['starting_value'] / 1_000_000
+        volume_m = volume_val / 1_000_000
+        price_m = price_val / 1_000_000
+        mix_m = mix_val / 1_000_000
+        ending_m = self.pvm_results['ending_value'] / 1_000_000
+
         # Waterfall chart data with colors and formatted labels
         data_series = [{
             'name': metric_display,
             'data': [
                 {
-                    'y': int(self.pvm_results['starting_value']),
+                    'y': starting_m,
                     'color': '#3b82f6',  # Blue for starting value
                     'dataLabels': {
                         'enabled': True,
@@ -922,7 +929,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
-                    'y': volume_val,
+                    'y': volume_m,
                     'color': get_color(volume_val),
                     'dataLabels': {
                         'enabled': True,
@@ -930,7 +937,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
-                    'y': price_val,
+                    'y': price_m,
                     'color': get_color(price_val),
                     'dataLabels': {
                         'enabled': True,
@@ -938,7 +945,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
-                    'y': mix_val,
+                    'y': mix_m,
                     'color': get_color(mix_val),
                     'dataLabels': {
                         'enabled': True,
@@ -947,7 +954,7 @@ class FPAVarianceAnalysis:
                 },
                 {
                     'isSum': True,
-                    'y': int(self.pvm_results['ending_value']),
+                    'y': ending_m,
                     'color': '#3b82f6',  # Blue for ending value
                     'dataLabels': {
                         'enabled': True,
@@ -970,7 +977,7 @@ class FPAVarianceAnalysis:
             'chart_data': data_series,
             'chart_y_axis': {
                 'title': {'text': metric_display},
-                'labels': {'format': '${value:,.0f}'}
+                'labels': {'format': '${value:,.0f}M'}
             },
             'chart_title': ''
         }
@@ -983,9 +990,9 @@ class FPAVarianceAnalysis:
         df = self.breakout_results[dimension]
 
         categories = df[dimension].tolist()
-        # Use simple integer arrays like price_variance_deep_dive does
-        actual_data = [int(x) for x in df['actual'].tolist()]
-        comparison_data = [int(x) for x in df['comparison'].tolist()]
+        # Convert to millions for cleaner display
+        actual_data = [x / 1_000_000 for x in df['actual'].tolist()]
+        comparison_data = [x / 1_000_000 for x in df['comparison'].tolist()]
 
         return {
             'chart_categories': categories,
@@ -1003,7 +1010,7 @@ class FPAVarianceAnalysis:
             ],
             'chart_y_axis': {
                 'title': {'text': format_display_name(self.metric)},
-                'labels': {'format': '${value:,.0f}'}
+                'labels': {'format': '${value:,.0f}M'}
             },
             'chart_title': f'{format_display_name(dimension)} Variance Analysis'
         }
