@@ -122,77 +122,6 @@ WATERFALL_CHART_LAYOUT = """
                 "hidden": false
             },
             {
-                "name": "CardContainer1",
-                "type": "FlexContainer",
-                "children": "",
-                "direction": "column",
-                "minHeight": "",
-                "maxHeight": "",
-                "style": {
-                    "borderRadius": "11.911px",
-                    "background": "var(--White, #FFF)",
-                    "box-shadow": "0px 0px 8.785px 0px rgba(0, 0, 0, 0.10) inset",
-                    "padding": "10px",
-                    "fontFamily": "Arial"
-                },
-                "flexDirection": "row",
-                "hidden": false
-            },
-            {
-                "name": "Header1",
-                "type": "Header",
-                "children": "",
-                "text": "Analysis Summary",
-                "style": {
-                    "fontSize": "20px",
-                    "fontWeight": "700",
-                    "textAlign": "left",
-                    "verticalAlign": "start",
-                    "color": "#000000",
-                    "backgroundColor": "#ffffff",
-                    "border": "null",
-                    "textDecoration": "null",
-                    "writingMode": "horizontal-tb",
-                    "borderBottom": "solid #DDD 2px"
-                },
-                "parentId": "CardContainer1",
-                "flex": "",
-                "hidden": false
-            },
-            {
-                "name": "Markdown0",
-                "type": "Markdown",
-                "children": "",
-                "text": "insights",
-                "style": {
-                    "color": "#555",
-                    "backgroundColor": "#ffffff",
-                    "border": "null",
-                    "fontSize": "15px"
-                },
-                "parentId": "CardContainer1",
-                "flex": "",
-                "hidden": false
-            },
-            {
-                "name": "FlexContainer5",
-                "type": "FlexContainer",
-                "minHeight": "450px",
-                "direction": "row",
-                "style": {
-                    "maxWidth": "100%",
-                    "width": "100%"
-                }
-            },
-            {
-                "name": "FlexContainer4",
-                "type": "FlexContainer",
-                "children": "",
-                "minHeight": "250px",
-                "direction": "column",
-                "maxHeight": "1200px"
-            },
-            {
                 "name": "HighchartsChart0",
                 "type": "HighchartsChart",
                 "minHeight": "450px",
@@ -230,7 +159,6 @@ WATERFALL_CHART_LAYOUT = """
                         "pointFormat": "<b>{point.name}</b>: {point.formatted}"
                     }
                 },
-                "parentId": "FlexContainer5",
                 "hidden": false
             },
             {
@@ -239,13 +167,45 @@ WATERFALL_CHART_LAYOUT = """
                 "children": "",
                 "columns": [],
                 "data": [],
-                "parentId": "FlexContainer4",
                 "caption": "",
                 "styles": {
                     "td": {
                         "vertical-align": "middle"
                     }
                 }
+            },
+            {
+                "name": "CardContainer1",
+                "type": "FlexContainer",
+                "children": "",
+                "direction": "column",
+                "minHeight": "",
+                "maxHeight": "",
+                "style": {
+                    "borderRadius": "11.911px",
+                    "background": "var(--White, #FFF)",
+                    "box-shadow": "0px 0px 8.785px 0px rgba(0, 0, 0, 0.10) inset",
+                    "padding": "10px",
+                    "fontFamily": "Arial",
+                    "marginTop": "20px"
+                },
+                "flexDirection": "row",
+                "hidden": false
+            },
+            {
+                "name": "Markdown0",
+                "type": "Markdown",
+                "children": "",
+                "text": "insights",
+                "style": {
+                    "color": "#555",
+                    "backgroundColor": "#ffffff",
+                    "border": "null",
+                    "fontSize": "15px"
+                },
+                "parentId": "CardContainer1",
+                "flex": "",
+                "hidden": false
             }
         ]
     },
@@ -346,17 +306,6 @@ WATERFALL_CHART_LAYOUT = """
                 {
                     "elementName": "DataTable0",
                     "fieldName": "columns"
-                }
-            ]
-        },
-        {
-            "name": "hide_chart",
-            "isRequired": false,
-            "defaultValue": null,
-            "targets": [
-                {
-                    "elementName": "FlexContainer5",
-                    "fieldName": "hidden"
                 }
             ]
         }
@@ -432,77 +381,6 @@ HORIZONTAL_BAR_LAYOUT = """
                 "hidden": false
             },
             {
-                "name": "CardContainer1",
-                "type": "FlexContainer",
-                "children": "",
-                "direction": "column",
-                "minHeight": "",
-                "maxHeight": "",
-                "style": {
-                    "borderRadius": "11.911px",
-                    "background": "var(--White, #FFF)",
-                    "box-shadow": "0px 0px 8.785px 0px rgba(0, 0, 0, 0.10) inset",
-                    "padding": "10px",
-                    "fontFamily": "Arial"
-                },
-                "flexDirection": "row",
-                "hidden": false
-            },
-            {
-                "name": "Header1",
-                "type": "Header",
-                "children": "",
-                "text": "Analysis Summary",
-                "style": {
-                    "fontSize": "20px",
-                    "fontWeight": "700",
-                    "textAlign": "left",
-                    "verticalAlign": "start",
-                    "color": "#000000",
-                    "backgroundColor": "#ffffff",
-                    "border": "null",
-                    "textDecoration": "null",
-                    "writingMode": "horizontal-tb",
-                    "borderBottom": "solid #DDD 2px"
-                },
-                "parentId": "CardContainer1",
-                "flex": "",
-                "hidden": false
-            },
-            {
-                "name": "Markdown0",
-                "type": "Markdown",
-                "children": "",
-                "text": "insights",
-                "style": {
-                    "color": "#555",
-                    "backgroundColor": "#ffffff",
-                    "border": "null",
-                    "fontSize": "15px"
-                },
-                "parentId": "CardContainer1",
-                "flex": "",
-                "hidden": false
-            },
-            {
-                "name": "FlexContainer5",
-                "type": "FlexContainer",
-                "minHeight": "400px",
-                "direction": "row",
-                "style": {
-                    "maxWidth": "100%",
-                    "width": "100%"
-                }
-            },
-            {
-                "name": "FlexContainer4",
-                "type": "FlexContainer",
-                "children": "",
-                "minHeight": "250px",
-                "direction": "column",
-                "maxHeight": "1200px"
-            },
-            {
                 "name": "HighchartsChart0",
                 "type": "HighchartsChart",
                 "minHeight": "400px",
@@ -547,10 +425,9 @@ HORIZONTAL_BAR_LAYOUT = """
                         }
                     },
                     "tooltip": {
-                        "pointFormat": "<b>{series.name}</b>: {point.formatted}"
+                        "pointFormat": "<b>{series.name}</b>: {point.y:,.0f}"
                     }
                 },
-                "parentId": "FlexContainer5",
                 "hidden": false
             },
             {
@@ -559,7 +436,6 @@ HORIZONTAL_BAR_LAYOUT = """
                 "children": "",
                 "columns": [],
                 "data": [],
-                "parentId": "FlexContainer4",
                 "caption": "",
                 "styles": {
                     "td": {
@@ -666,17 +542,6 @@ HORIZONTAL_BAR_LAYOUT = """
                 {
                     "elementName": "DataTable0",
                     "fieldName": "columns"
-                }
-            ]
-        },
-        {
-            "name": "hide_chart",
-            "isRequired": false,
-            "defaultValue": null,
-            "targets": [
-                {
-                    "elementName": "FlexContainer5",
-                    "fieldName": "hidden"
                 }
             ]
         }
@@ -1036,22 +901,29 @@ class FPAVarianceAnalysis:
         }
 
     def get_summary_table(self):
-        """Create summary table for PVM decomposition"""
+        """Create driver analysis table with Current Period, Compare Period, Change columns"""
         if not self.pvm_results:
             return None
 
+        # Calculate variance amount and percentage
+        variance_amount = self.pvm_results['total_variance']
+        variance_pct = (variance_amount / self.pvm_results['starting_value'] * 100) if self.pvm_results['starting_value'] != 0 else 0
+
+        # Create driver analysis table format
         data = [
-            [f"{self.comparison_type}", format_number(self.pvm_results['starting_value'])],
-            ["Volume Impact", format_number(self.pvm_results['volume_impact'])],
-            ["Price Impact", format_number(self.pvm_results['price_impact'])],
-            ["Mix Impact", format_number(self.pvm_results['mix_impact'])],
-            ["Total Variance", format_number(self.pvm_results['total_variance'])],
-            ["Actuals", format_number(self.pvm_results['ending_value'])]
+            [
+                format_number(self.pvm_results['ending_value']),      # Current Period (Actuals)
+                format_number(self.pvm_results['starting_value']),    # Compare Period (Budget/Forecast)
+                format_number(variance_amount),                        # Change ($)
+                f"{variance_pct:.1f}%"                                # Change (%)
+            ]
         ]
 
         columns = [
-            {'name': 'Component'},
-            {'name': 'Value'}
+            {'name': 'Current Period'},
+            {'name': f'{self.comparison_type}'},
+            {'name': 'Change ($)'},
+            {'name': 'Change (%)'}
         ]
 
         return {'data': data, 'col_defs': columns}
@@ -1256,8 +1128,7 @@ def metric_drivers(parameters: SkillInput):
         general_vars = {
             "headline": f"{metric} Variance Analysis",
             "sub_headline": f"{period} | Actuals vs {comparison_type}",
-            "exec_summary": insights,
-            "hide_chart": False
+            "exec_summary": insights
         }
 
         layout_vars = {**general_vars, **waterfall_data, **summary_table}
@@ -1280,9 +1151,7 @@ def metric_drivers(parameters: SkillInput):
         if bar_data and table_data:
             general_vars = {
                 "headline": f"{dimension} Breakout",
-                "sub_headline": f"Top {top_n} Contributors to Variance",
-                "exec_summary": "",
-                "hide_chart": False
+                "sub_headline": f"Top {top_n} Contributors to Variance"
             }
 
             layout_vars = {**general_vars, **bar_data, **table_data}
