@@ -758,6 +758,9 @@ class FPAVarianceAnalysis:
         from dateutil.parser import parse
         from datetime import datetime
 
+        if not period_str:
+            raise ValueError("Period is required but was not provided")
+
         period_lower = period_str.lower().strip()
 
         # Handle quarters (Q1 2024, Q2 2025, etc.)
@@ -1171,6 +1174,23 @@ def metric_drivers(parameters: SkillInput):
     other_filters = getattr(parameters.arguments, 'other_filters', [])
     max_prompt = getattr(parameters.arguments, 'max_prompt', DEFAULT_MAX_PROMPT)
     insight_prompt = getattr(parameters.arguments, 'insight_prompt', DEFAULT_INSIGHT_PROMPT)
+
+    # Validate required parameters
+    if not metric:
+        return SkillOutput(
+            final_prompt="Please select a metric to analyze (e.g., gross_revenue, net_revenue).",
+            narrative="**Missing Parameter**: A metric is required for variance analysis.",
+            visualizations=[],
+            warnings=["Metric parameter is required"]
+        )
+
+    if not period:
+        return SkillOutput(
+            final_prompt="Please select a time period for analysis (e.g., Q3 2024, Jan 2025).",
+            narrative="**Missing Parameter**: A time period is required for variance analysis.",
+            visualizations=[],
+            warnings=["Period parameter is required"]
+        )
 
     # Get AnswerRocketClient
     try:
