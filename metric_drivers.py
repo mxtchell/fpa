@@ -921,6 +921,7 @@ class FPAVarianceAnalysis:
             'name': metric_display,
             'data': [
                 {
+                    'name': self.comparison_type,
                     'y': starting_m,
                     'color': '#3b82f6',  # Blue for starting value
                     'dataLabels': {
@@ -929,6 +930,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
+                    'name': 'Volume',
                     'y': volume_m,
                     'color': get_color(volume_val),
                     'dataLabels': {
@@ -937,6 +939,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
+                    'name': 'Price',
                     'y': price_m,
                     'color': get_color(price_val),
                     'dataLabels': {
@@ -945,6 +948,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
+                    'name': 'Mix',
                     'y': mix_m,
                     'color': get_color(mix_val),
                     'dataLabels': {
@@ -953,6 +957,7 @@ class FPAVarianceAnalysis:
                     }
                 },
                 {
+                    'name': 'Actuals',
                     'isSum': True,
                     'y': ending_m,
                     'color': '#3b82f6',  # Blue for ending value
@@ -966,9 +971,12 @@ class FPAVarianceAnalysis:
                 'enabled': True,
                 'style': {
                     'fontWeight': 'bold',
-                    'color': '#ffffff',
+                    'color': '#000000',
                     'textOutline': 'none'
                 }
+            },
+            'tooltip': {
+                'pointFormat': '<b>{point.name}</b>: {point.y:.2f}M'
             }
         }]
 
@@ -1347,15 +1355,15 @@ def metric_drivers(parameters: SkillInput):
             viz_list.append(SkillVisualization(title=dimension_display, layout=rendered))
             export_data[f"{dimension}_Variance"] = analysis.breakout_results[dimension]
 
-    # Create parameter display
+    # Create parameter display - format as "Key: Value" in the value field
     metric_display = format_display_name(metric)
     dimensions_display = ", ".join([format_display_name(d) for d in breakout_dimensions]) if breakout_dimensions else "None"
 
     param_info = [
-        ParameterDisplayDescription(key="Metric", value=metric_display),
-        ParameterDisplayDescription(key="Period", value=period),
-        ParameterDisplayDescription(key="Comparison", value=comparison_type),
-        ParameterDisplayDescription(key="Dimensions", value=dimensions_display)
+        ParameterDisplayDescription(key="", value=f"Metric: {metric_display}"),
+        ParameterDisplayDescription(key="", value=f"Period: {period}"),
+        ParameterDisplayDescription(key="", value=f"Comparison: {comparison_type}"),
+        ParameterDisplayDescription(key="", value=f"Dimensions: {dimensions_display}")
     ]
 
     # Add any user-specified filters to parameter display
@@ -1367,7 +1375,7 @@ def metric_drivers(parameters: SkillInput):
             val = f.get('val', '')
             filter_descriptions.append(f"{dim} {op} {val}")
         param_info.append(
-            ParameterDisplayDescription(key="Filters", value="; ".join(filter_descriptions))
+            ParameterDisplayDescription(key="", value=f"Filters: {'; '.join(filter_descriptions)}")
         )
 
     return SkillOutput(
