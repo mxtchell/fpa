@@ -616,7 +616,10 @@ class FPAVarianceAnalysis:
         return mapping.get(self.comparison_type, 'budget')
 
     def build_filter_clause(self):
-        """Build SQL WHERE clause from filters"""
+        """Build SQL WHERE clause from filters
+
+        Uses case-insensitive matching (UPPER()) for string comparisons
+        """
         clauses = []
 
         if self.other_filters:
@@ -629,15 +632,17 @@ class FPAVarianceAnalysis:
                     # Handle list values - extract first element or use IN clause
                     if isinstance(val, list):
                         if len(val) == 1:
-                            # Single value in list - use equality
-                            clauses.append(f"{dim} {op} '{val[0]}'")
+                            # Single value in list - use case-insensitive equality
+                            clauses.append(f"UPPER({dim}) {op} UPPER('{val[0]}')")
                         else:
-                            # Multiple values - use IN clause
-                            val_str = ", ".join([f"'{v}'" for v in val])
-                            clauses.append(f"{dim} IN ({val_str})")
+                            # Multiple values - use case-insensitive IN clause
+                            val_str = ", ".join([f"UPPER('{v}')" for v in val])
+                            clauses.append(f"UPPER({dim}) IN ({val_str})")
                     elif isinstance(val, str):
-                        clauses.append(f"{dim} {op} '{val}'")
+                        # Case-insensitive string comparison
+                        clauses.append(f"UPPER({dim}) {op} UPPER('{val}')")
                     else:
+                        # Numeric comparison - no need for UPPER()
                         clauses.append(f"{dim} {op} {val}")
 
         return " AND " + " AND ".join(clauses) if clauses else ""
@@ -965,10 +970,7 @@ class FPAVarianceAnalysis:
             'chart_data': data_series,
             'chart_y_axis': {
                 'title': {'text': metric_display},
-                'labels': {
-                    'formatter': 'function() { return "$" + (this.value / 1000000).toFixed(0) + "M"; }'
-                },
-                'tickInterval': None  # Auto calculate
+                'labels': {'format': '${value:,.0f}'}
             },
             'chart_title': ''
         }
