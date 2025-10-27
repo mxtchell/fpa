@@ -753,6 +753,53 @@ class FPAVarianceAnalysis:
 
         return " AND " + " AND ".join(clauses) if clauses else ""
 
+    def parse_period_to_date_range(self, period_str):
+        """Convert period string to date range for SQL query"""
+        from dateutil.parser import parse
+        from datetime import datetime
+
+        period_lower = period_str.lower().strip()
+
+        # Handle quarters (Q1 2024, Q2 2025, etc.)
+        if period_lower.startswith('q'):
+            parts = period_str.split()
+            quarter = int(parts[0][1])  # Extract quarter number
+            year = int(parts[1])
+
+            quarter_map = {
+                1: ('01-01', '03-31'),
+                2: ('04-01', '06-30'),
+                3: ('07-01', '09-30'),
+                4: ('10-01', '12-31')
+            }
+            start_month_day, end_month_day = quarter_map[quarter]
+            return f"{year}-{start_month_day}", f"{year}-{end_month_day}"
+
+        # Handle single months (January 2025, Jan 2025, 2025-01, etc.)
+        try:
+            parsed_date = parse(period_str, fuzzy=True)
+            year = parsed_date.year
+            month = parsed_date.month
+
+            # Get last day of month
+            if month == 12:
+                last_day = 31
+            elif month in [4, 6, 9, 11]:
+                last_day = 30
+            elif month == 2:
+                # Check for leap year
+                if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+                    last_day = 29
+                else:
+                    last_day = 28
+            else:
+                last_day = 31
+
+            return f"{year}-{month:02d}-01", f"{year}-{month:02d}-{last_day}"
+        except:
+            # If can't parse, return as-is
+            return period_str, period_str
+
     def query_data(self):
         """Query actuals and comparison data from database"""
         logger.info(f"Querying data for metric: {self.metric}, period: {self.period}")
@@ -760,12 +807,16 @@ class FPAVarianceAnalysis:
         filter_clause = self.build_filter_clause()
         comparison_scenario = self.get_comparison_scenario()
 
+        # Parse period to date range
+        start_date, end_date = self.parse_period_to_date_range(self.period)
+        logger.info(f"Parsed period '{self.period}' to date range: {start_date} to {end_date}")
+
         # Query actuals
         actuals_query = f"""
         SELECT *
         FROM read_csv('gartner.csv')
         WHERE scenario = 'actuals'
-        AND period = '{self.period}'
+        AND end_date BETWEEN '{start_date}' AND '{end_date}'
         {filter_clause}
         """
 
@@ -782,7 +833,7 @@ class FPAVarianceAnalysis:
         SELECT *
         FROM read_csv('gartner.csv')
         WHERE scenario = '{comparison_scenario}'
-        AND period = '{self.period}'
+        AND end_date BETWEEN '{start_date}' AND '{end_date}'
         {filter_clause}
         """
 
