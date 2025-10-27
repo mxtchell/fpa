@@ -157,11 +157,12 @@ WATERFALL_CHART_LAYOUT = """
             {
                 "name": "HighchartsChart0",
                 "type": "HighchartsChart",
-                "minHeight": "450px",
+                "minHeight": "600px",
                 "chartOptions": {},
                 "options": {
                     "chart": {
-                        "type": "waterfall"
+                        "type": "waterfall",
+                        "height": 600
                     },
                     "title": {
                         "text": "",
@@ -625,7 +626,16 @@ class FPAVarianceAnalysis:
                 val = filter_dict.get('val')
 
                 if dim and val:
-                    if isinstance(val, str):
+                    # Handle list values - extract first element or use IN clause
+                    if isinstance(val, list):
+                        if len(val) == 1:
+                            # Single value in list - use equality
+                            clauses.append(f"{dim} {op} '{val[0]}'")
+                        else:
+                            # Multiple values - use IN clause
+                            val_str = ", ".join([f"'{v}'" for v in val])
+                            clauses.append(f"{dim} IN ({val_str})")
+                    elif isinstance(val, str):
                         clauses.append(f"{dim} {op} '{val}'")
                     else:
                         clauses.append(f"{dim} {op} {val}")
@@ -955,7 +965,9 @@ class FPAVarianceAnalysis:
             'chart_data': data_series,
             'chart_y_axis': {
                 'title': {'text': metric_display},
-                'labels': {'format': '${value:,.2f}M'},
+                'labels': {
+                    'formatter': 'function() { return "$" + (this.value / 1000000).toFixed(0) + "M"; }'
+                },
                 'tickInterval': None  # Auto calculate
             },
             'chart_title': ''
