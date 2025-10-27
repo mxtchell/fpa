@@ -848,6 +848,13 @@ class FPAVarianceAnalysis:
         logger.info(f"Actuals shape: {self.actuals_df.shape if self.actuals_df is not None else 'None'}")
         logger.info(f"Comparison shape: {self.comparison_df.shape if self.comparison_df is not None else 'None'}")
 
+        # Check if we got any comparison data
+        if self.comparison_df is None or self.comparison_df.empty:
+            logger.error(f"No {comparison_scenario} data found for period {self.period} ({start_date} to {end_date})")
+            logger.error("Please check: (1) scenario column has value '{comparison_scenario}', (2) end_date has data in this range")
+            # Return empty dataframes to prevent division by zero
+            raise ValueError(f"No {comparison_scenario} data available for period {self.period}")
+
     def calculate_price_volume_mix(self):
         """
         Calculate Price-Volume-Mix decomposition
@@ -962,49 +969,29 @@ class FPAVarianceAnalysis:
             "Actuals"
         ]
 
-        data = [
-            {
-                'name': f"{self.comparison_type}",
-                'y': self.pvm_results['starting_value'],
-                'formatted': format_number(self.pvm_results['starting_value']),
-                'color': '#7CB5EC'
-            },
-            {
-                'name': 'Volume Impact',
-                'y': self.pvm_results['volume_impact'],
-                'formatted': format_number(self.pvm_results['volume_impact']),
-                'color': '#90ED7D' if self.pvm_results['volume_impact'] > 0 else '#F45B5B'
-            },
-            {
-                'name': 'Price Impact',
-                'y': self.pvm_results['price_impact'],
-                'formatted': format_number(self.pvm_results['price_impact']),
-                'color': '#90ED7D' if self.pvm_results['price_impact'] > 0 else '#F45B5B'
-            },
-            {
-                'name': 'Mix Impact',
-                'y': self.pvm_results['mix_impact'],
-                'formatted': format_number(self.pvm_results['mix_impact']),
-                'color': '#90ED7D' if self.pvm_results['mix_impact'] > 0 else '#F45B5B'
-            },
-            {
-                'name': 'Actuals',
-                'isSum': True,
-                'formatted': format_number(self.pvm_results['ending_value']),
-                'color': '#434348'
+        # Waterfall charts need simple numeric data
+        # First value is the starting point, middle values are changes, last is sum
+        data_series = [{
+            'name': self.metric,
+            'data': [
+                int(self.pvm_results['starting_value']),  # Starting value
+                int(self.pvm_results['volume_impact']),   # Change
+                int(self.pvm_results['price_impact']),    # Change
+                int(self.pvm_results['mix_impact']),      # Change
+                {
+                    'isSum': True,
+                    'y': int(self.pvm_results['ending_value'])  # Ending sum
+                }
+            ],
+            'dataLabels': {
+                'enabled': True,
+                'format': '${point.y:,.0f}'
             }
-        ]
+        }]
 
         return {
             'chart_categories': categories,
-            'chart_data': [{
-                'name': self.metric,
-                'data': data,
-                'dataLabels': {
-                    'enabled': True,
-                    'formatter': "function() { return this.point.formatted; }"
-                }
-            }],
+            'chart_data': data_series,
             'chart_y_axis': {
                 'title': {'text': self.metric},
                 'labels': {'format': '${value:,.0f}'}
@@ -1020,20 +1007,9 @@ class FPAVarianceAnalysis:
         df = self.breakout_results[dimension]
 
         categories = df[dimension].tolist()
-        actual_data = []
-        comparison_data = []
-
-        for _, row in df.iterrows():
-            actual_data.append({
-                'name': row[dimension],
-                'y': row['actual'],
-                'formatted': format_number(row['actual'])
-            })
-            comparison_data.append({
-                'name': row[dimension],
-                'y': row['comparison'],
-                'formatted': format_number(row['comparison'])
-            })
+        # Use simple integer arrays like price_variance_deep_dive does
+        actual_data = [int(x) for x in df['actual'].tolist()]
+        comparison_data = [int(x) for x in df['comparison'].tolist()]
 
         return {
             'chart_categories': categories,
@@ -1221,7 +1197,16 @@ def metric_drivers(parameters: SkillInput):
         other_filters=other_filters
     )
 
-    analysis.run_analysis()
+    try:
+        analysis.run_analysis()
+    except ValueError as e:
+        logger.error(f"Analysis failed: {e}")
+        return SkillOutput(
+            final_prompt=f"Analysis could not be completed: {str(e)}. Please try a different time period or check that budget/forecast data exists for the selected period.",
+            narrative=f"**Error**: {str(e)}\n\nPlease select a time period where both actuals and {comparison_type.lower()} data are available.",
+            visualizations=[],
+            warnings=[str(e)]
+        )
 
     # Generate insights
     facts_list = [pd.DataFrame(analysis.facts)]
@@ -1244,6 +1229,9 @@ def metric_drivers(parameters: SkillInput):
     waterfall_data = analysis.create_waterfall_chart_data()
     summary_table = analysis.get_summary_table()
 
+    logger.info(f"Waterfall data: {waterfall_data}")
+    logger.info(f"Summary table: {summary_table}")
+
     if waterfall_data and summary_table:
         general_vars = {
             "headline": f"{metric} Variance Analysis",
@@ -1253,9 +1241,16 @@ def metric_drivers(parameters: SkillInput):
         }
 
         layout_vars = {**general_vars, **waterfall_data, **summary_table}
+
+        logger.info(f"Layout vars keys: {layout_vars.keys()}")
+        logger.info(f"Chart data sample: {layout_vars.get('chart_data', 'MISSING')}")
+        logger.info(f"Table data sample: {layout_vars.get('data', 'MISSING')}")
+
         rendered = wire_layout(json.loads(WATERFALL_CHART_LAYOUT), layout_vars)
         viz_list.append(SkillVisualization(title="Price-Volume-Mix Analysis", layout=rendered))
         export_data["PVM_Summary"] = pd.DataFrame(summary_table['data'], columns=['Component', 'Value'])
+    else:
+        logger.error(f"Missing waterfall data or summary table - waterfall: {waterfall_data is not None}, table: {summary_table is not None}")
 
     # Tab 2+: Horizontal Bar Charts for each dimension
     for dimension in breakout_dimensions:
