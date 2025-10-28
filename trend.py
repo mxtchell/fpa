@@ -18,147 +18,6 @@ RUNNING_LOCALLY = False
 
 logger = logging.getLogger(__name__)
 
-# Metrics that should be formatted in millions with $M suffix
-LARGE_CURRENCY_METRICS = [
-    'gross_revenue',
-    'net_revenue',
-    'brand_contribution_margin',
-    'gross_profit'
-]
-
-# Metrics that should use regular currency formatting (not millions)
-REGULAR_CURRENCY_METRICS = [
-    'price'
-]
-
-
-class FPATrend(AdvanceTrend):
-    """
-    Custom FP&A Trend with smart currency formatting.
-    - Large metrics (revenue, profit) show as $M
-    - Price shows as regular currency like $730.1
-    - Applied to axis labels, tooltips, and table values
-    """
-
-    def format_large_number(self, value):
-        """Format large numbers with $M suffix"""
-        if value is None or value == 0:
-            return "$0M"
-
-        millions = value / 1_000_000
-        return f"${millions:,.1f}M"
-
-    def get_y_axis_formatter(self, metric_name):
-        """
-        Get the appropriate y-axis formatter based on metric type.
-        Returns JavaScript formatter function as string.
-        """
-        base_metric = metric_name.lower()
-
-        # Check if this is a large currency metric
-        for large_metric in LARGE_CURRENCY_METRICS:
-            if large_metric in base_metric:
-                return """
-                function() {
-                    return '$' + (this.value / 1000000).toFixed(1) + 'M';
-                }
-                """
-
-        # Check if this is price (regular currency)
-        for regular_metric in REGULAR_CURRENCY_METRICS:
-            if regular_metric in base_metric:
-                return """
-                function() {
-                    return '$' + this.value.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
-                }
-                """
-
-        # Default: auto-format based on magnitude
-        return """
-        function() {
-            if (Math.abs(this.value) >= 1000000) {
-                return '$' + (this.value / 1000000).toFixed(1) + 'M';
-            } else if (Math.abs(this.value) >= 1000) {
-                return '$' + (this.value / 1000).toFixed(1) + 'K';
-            } else {
-                return '$' + this.value.toLocaleString();
-            }
-        }
-        """
-
-    def get_tooltip_formatter(self, metric_name):
-        """
-        Get the appropriate tooltip formatter based on metric type.
-        Returns JavaScript formatter function as string.
-        """
-        base_metric = metric_name.lower()
-
-        # Check if this is a large currency metric
-        for large_metric in LARGE_CURRENCY_METRICS:
-            if large_metric in base_metric:
-                return """
-                function() {
-                    var value = '$' + (this.y / 1000000).toFixed(2) + 'M';
-                    return '<b>' + this.series.name + '</b><br/>' +
-                           this.x + ': ' + value;
-                }
-                """
-
-        # Check if this is price (regular currency)
-        for regular_metric in REGULAR_CURRENCY_METRICS:
-            if regular_metric in base_metric:
-                return """
-                function() {
-                    var value = '$' + this.y.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
-                    return '<b>' + this.series.name + '</b><br/>' +
-                           this.x + ': ' + value;
-                }
-                """
-
-        # Default: auto-format based on magnitude
-        return """
-        function() {
-            var value;
-            if (Math.abs(this.y) >= 1000000) {
-                value = '$' + (this.y / 1000000).toFixed(2) + 'M';
-            } else if (Math.abs(this.y) >= 1000) {
-                value = '$' + (this.y / 1000).toFixed(1) + 'K';
-            } else {
-                value = '$' + this.y.toLocaleString();
-            }
-            return '<b>' + this.series.name + '</b><br/>' +
-                   this.x + ': ' + value;
-        }
-        """
-
-    def get_dynamic_layout_chart_vars(self):
-        """
-        Override to add custom formatters to chart configurations
-        """
-        chart_vars = super().get_dynamic_layout_chart_vars()
-
-        # Apply formatters to each chart
-        for chart_name, vars_dict in chart_vars.items():
-            # Get metric name from the chart
-            metric_name = vars_dict.get('absolute_metric_name', '')
-
-            # Add custom y-axis formatter
-            if 'absolute_y_axis' in vars_dict:
-                y_axis = vars_dict['absolute_y_axis']
-                if isinstance(y_axis, dict):
-                    y_axis['labels'] = y_axis.get('labels', {})
-                    y_axis['labels']['formatter'] = self.get_y_axis_formatter(metric_name)
-
-            # Add custom tooltip formatter to each series
-            if 'absolute_series' in vars_dict:
-                for series in vars_dict['absolute_series']:
-                    if isinstance(series, dict):
-                        series['tooltip'] = {
-                            'pointFormatter': self.get_tooltip_formatter(metric_name)
-                        }
-
-        return chart_vars
-
 
 @skill(
     name="FP&A Trend",
@@ -285,8 +144,8 @@ def trend(parameters: SkillInput):
     env = SimpleNamespace(**param_dict)
     TrendTemplateParameterSetup(env=env)
 
-    # Use custom FPATrend class with smart formatting
-    env.trend = FPATrend.from_env(env=env)
+    # Use standard AdvanceTrend
+    env.trend = AdvanceTrend.from_env(env=env)
     df = env.trend.run_from_env()
 
     param_info = [ParameterDisplayDescription(key=k, value=v) for k, v in env.trend.paramater_display_infomation.items()]
@@ -295,6 +154,9 @@ def trend(parameters: SkillInput):
     insights_dfs = [env.trend.df_notes, env.trend.facts, env.trend.top_facts, env.trend.bottom_facts]
 
     charts = env.trend.get_dynamic_layout_chart_vars()
+
+    # Apply custom formatting to charts
+    charts = apply_fpa_formatting(charts)
 
     viz, slides, insights, final_prompt = render_layout(
         charts,
@@ -325,6 +187,74 @@ def trend(parameters: SkillInput):
             *[ExportData(name=chart, data=display_charts[chart].get("df")) for chart in display_charts.keys()]
         ]
     )
+
+
+def apply_fpa_formatting(charts):
+    """Apply FP&A currency formatting to chart configurations"""
+    # Metrics that should be formatted in millions
+    large_currency_metrics = ['gross_revenue', 'net_revenue', 'brand_contribution_margin', 'gross_profit']
+
+    for chart_name, vars_dict in charts.items():
+        metric_name = vars_dict.get('absolute_metric_name', '').lower()
+
+        # Check if this is a large currency metric
+        use_millions = any(large_metric in metric_name for large_metric in large_currency_metrics)
+
+        if use_millions:
+            # Y-axis formatter for millions
+            y_axis_formatter = """
+            function() {
+                return '$' + (this.value / 1000000).toFixed(1) + 'M';
+            }
+            """
+            # Tooltip formatter for millions
+            tooltip_formatter = """
+            function() {
+                var value = '$' + (this.y / 1000000).toFixed(2) + 'M';
+                return '<b>' + this.series.name + '</b><br/>' + this.x + ': ' + value;
+            }
+            """
+        else:
+            # Default formatting
+            y_axis_formatter = """
+            function() {
+                if (Math.abs(this.value) >= 1000000) {
+                    return '$' + (this.value / 1000000).toFixed(1) + 'M';
+                } else if (Math.abs(this.value) >= 1000) {
+                    return '$' + (this.value / 1000).toFixed(1) + 'K';
+                } else {
+                    return '$' + this.value.toLocaleString();
+                }
+            }
+            """
+            tooltip_formatter = """
+            function() {
+                var value;
+                if (Math.abs(this.y) >= 1000000) {
+                    value = '$' + (this.y / 1000000).toFixed(2) + 'M';
+                } else if (Math.abs(this.y) >= 1000) {
+                    value = '$' + (this.y / 1000).toFixed(1) + 'K';
+                } else {
+                    value = '$' + this.y.toLocaleString();
+                }
+                return '<b>' + this.series.name + '</b><br/>' + this.x + ': ' + value;
+            }
+            """
+
+        # Apply to y-axis
+        if 'absolute_y_axis' in vars_dict:
+            y_axis = vars_dict['absolute_y_axis']
+            if isinstance(y_axis, dict):
+                y_axis['labels'] = y_axis.get('labels', {})
+                y_axis['labels']['formatter'] = y_axis_formatter
+
+        # Apply to tooltips
+        if 'absolute_series' in vars_dict:
+            for series in vars_dict['absolute_series']:
+                if isinstance(series, dict):
+                    series['tooltip'] = {'pointFormatter': tooltip_formatter}
+
+    return charts
 
 
 def map_chart_variables(chart_vars, prefix):
