@@ -190,60 +190,43 @@ def trend(parameters: SkillInput):
 
 
 def apply_fpa_formatting(charts):
-    """Apply FP&A currency formatting to chart configurations"""
-    # Metrics that should be formatted in millions (with and without underscores)
+    """Apply FP&A currency formatting to chart configurations.
+
+    Scales large currency metrics to millions and updates Y-axis format to show $X.XM
+    """
     large_currency_metrics = ['gross_revenue', 'gross revenue', 'net_revenue', 'net revenue',
-                              'brand_contribution_margin', 'brand contribution margin', 'gross_profit', 'gross profit']
+                              'brand_contribution_margin', 'brand contribution margin',
+                              'gross_profit', 'gross profit']
 
     for chart_name, vars_dict in charts.items():
-        # Try to get metric name from multiple sources
-        metric_name = vars_dict.get('absolute_metric_name', '').lower()
+        # Get metric name from absolute_metric_name or fall back to chart name
+        metric_name = vars_dict.get('absolute_metric_name', '') or chart_name
+        metric_name = metric_name.lower()
 
-        # If absolute_metric_name is empty, try the chart name itself
-        if not metric_name:
-            metric_name = chart_name.lower()
-
-        # Check if this is a large currency metric
+        # Check if this metric should be formatted in millions
         use_millions = any(large_metric in metric_name for large_metric in large_currency_metrics)
 
-        logger.info(f"Processing chart: {chart_name}, metric from name: {metric_name}, use_millions: {use_millions}")
-        logger.info(f"Chart vars keys: {vars_dict.keys()}")
+        logger.info(f"Chart: {chart_name}, metric: {metric_name}, use_millions: {use_millions}")
 
         if use_millions:
-            # Apply to series data - scale to millions FIRST
+            # Scale series data to millions
             if 'absolute_series' in vars_dict:
-                logger.info(f"Found absolute_series: {type(vars_dict['absolute_series'])}")
-                for idx, series in enumerate(vars_dict['absolute_series']):
-                    logger.info(f"Series {idx}: type={type(series)}, keys={series.keys() if isinstance(series, dict) else 'not dict'}")
+                for series in vars_dict['absolute_series']:
                     if isinstance(series, dict) and 'data' in series:
-                        original_data = series['data'][:3] if len(series['data']) > 3 else series['data']
-                        logger.info(f"Original data sample: {original_data}")
-                        # Scale data points to millions - handle both numbers and None/strings
                         series['data'] = [
                             val / 1_000_000 if val is not None and isinstance(val, (int, float)) else val
                             for val in series['data']
                         ]
-                        scaled_data = series['data'][:3] if len(series['data']) > 3 else series['data']
-                        logger.info(f"Scaled data sample: {scaled_data}")
 
-            # Apply to y-axis - modify format string to add M suffix
+            # Update Y-axis format to add M suffix
             if 'absolute_y_axis' in vars_dict:
                 y_axis = vars_dict['absolute_y_axis']
-                logger.info(f"Y-axis before: {y_axis}")
-
-                # Y-axis might be a list or a dict
                 y_axes = y_axis if isinstance(y_axis, list) else [y_axis]
 
                 for axis in y_axes:
                     if isinstance(axis, dict):
                         axis['labels'] = axis.get('labels', {})
-                        # Just modify the format string to add M suffix - simpler approach
-                        # Change ${value:,.2f} to ${value:,.1f}M
-                        current_format = axis['labels'].get('format', '${value:,.2f}')
-                        # Replace the closing } with M and then }
                         axis['labels']['format'] = '${value:,.1f}M'
-
-                logger.info(f"Y-axis after: {y_axis}")
 
     return charts
 
