@@ -200,21 +200,32 @@ def apply_fpa_formatting(charts):
         # Check if this is a large currency metric
         use_millions = any(large_metric in metric_name for large_metric in large_currency_metrics)
 
+        logger.info(f"Processing chart: {chart_name}, metric: {metric_name}, use_millions: {use_millions}")
+        logger.info(f"Chart vars keys: {vars_dict.keys()}")
+
         if use_millions:
             # Apply to series data - scale to millions FIRST
             if 'absolute_series' in vars_dict:
-                for series in vars_dict['absolute_series']:
+                logger.info(f"Found absolute_series: {type(vars_dict['absolute_series'])}")
+                for idx, series in enumerate(vars_dict['absolute_series']):
+                    logger.info(f"Series {idx}: type={type(series)}, keys={series.keys() if isinstance(series, dict) else 'not dict'}")
                     if isinstance(series, dict) and 'data' in series:
+                        original_data = series['data'][:3] if len(series['data']) > 3 else series['data']
+                        logger.info(f"Original data sample: {original_data}")
                         # Scale data points to millions
                         series['data'] = [val / 1_000_000 if val is not None else None for val in series['data']]
+                        scaled_data = series['data'][:3] if len(series['data']) > 3 else series['data']
+                        logger.info(f"Scaled data sample: {scaled_data}")
 
             # Apply to y-axis - simple format with M suffix
             if 'absolute_y_axis' in vars_dict:
                 y_axis = vars_dict['absolute_y_axis']
+                logger.info(f"Y-axis before: {y_axis}")
                 if isinstance(y_axis, dict):
                     y_axis['labels'] = y_axis.get('labels', {})
                     # Highcharts format syntax
                     y_axis['labels']['format'] = '${value:.1f}M'
+                    logger.info(f"Y-axis after: {y_axis}")
 
     return charts
 
