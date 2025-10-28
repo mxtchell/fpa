@@ -201,32 +201,20 @@ def apply_fpa_formatting(charts):
         use_millions = any(large_metric in metric_name for large_metric in large_currency_metrics)
 
         if use_millions:
-            # Y-axis format string (not a function)
-            y_axis_format = '${value:,.1f}M'
+            # Apply to series data - scale to millions FIRST
+            if 'absolute_series' in vars_dict:
+                for series in vars_dict['absolute_series']:
+                    if isinstance(series, dict) and 'data' in series:
+                        # Scale data points to millions
+                        series['data'] = [val / 1_000_000 if val is not None else None for val in series['data']]
 
-            # Tooltip uses pointFormat
-            tooltip_format = '<b>{series.name}</b><br/>{point.x}: ${point.y:,.2f}M'
-        else:
-            # Default formatting with auto-scale
-            y_axis_format = '${value:,.0f}'
-            tooltip_format = '<b>{series.name}</b><br/>{point.x}: ${point.y:,.0f}'
-
-        # Apply to y-axis - need to scale values, not just format
-        if 'absolute_y_axis' in vars_dict:
-            y_axis = vars_dict['absolute_y_axis']
-            if isinstance(y_axis, dict) and use_millions:
-                # For millions, we need to transform the data points themselves
-                # The format string alone won't work
-                y_axis['labels'] = y_axis.get('labels', {})
-                y_axis['labels']['format'] = y_axis_format
-
-        # Apply to series data - scale to millions
-        if 'absolute_series' in vars_dict and use_millions:
-            for series in vars_dict['absolute_series']:
-                if isinstance(series, dict) and 'data' in series:
-                    # Scale data points to millions
-                    series['data'] = [val / 1_000_000 if val is not None else None for val in series['data']]
-                    series['tooltip'] = {'pointFormat': tooltip_format}
+            # Apply to y-axis - simple format with M suffix
+            if 'absolute_y_axis' in vars_dict:
+                y_axis = vars_dict['absolute_y_axis']
+                if isinstance(y_axis, dict):
+                    y_axis['labels'] = y_axis.get('labels', {})
+                    # Highcharts format syntax
+                    y_axis['labels']['format'] = '${value:.1f}M'
 
     return charts
 
