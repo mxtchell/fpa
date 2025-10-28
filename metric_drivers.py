@@ -808,66 +808,19 @@ class FPAVarianceAnalysis:
         comparison_revenue = self.comparison_df[self.metric].sum()
         total_variance = actual_revenue - comparison_revenue
 
-        if mix_dimension and volume_col in self.actuals_df.columns:
-            # Dimensional PVM calculation to capture mix effects
-            logger.info(f"Using dimensional PVM calculation with dimension: {mix_dimension}")
+        # Simple aggregate PVM calculation
+        logger.info("Using simple aggregate PVM calculation")
 
-            # Aggregate by dimension
-            actual_by_dim = self.actuals_df.groupby(mix_dimension).agg({
-                self.metric: 'sum',
-                volume_col: 'sum'
-            }).reset_index()
-            actual_by_dim['price'] = actual_by_dim[self.metric] / actual_by_dim[volume_col]
-            actual_by_dim['share'] = actual_by_dim[self.metric] / actual_revenue
+        actual_volume = self.actuals_df[volume_col].sum() if volume_col in self.actuals_df.columns else 0
+        actual_price = actual_revenue / actual_volume if actual_volume > 0 else 0
 
-            comparison_by_dim = self.comparison_df.groupby(mix_dimension).agg({
-                self.metric: 'sum',
-                volume_col: 'sum'
-            }).reset_index()
-            comparison_by_dim['price'] = comparison_by_dim[self.metric] / comparison_by_dim[volume_col]
-            comparison_by_dim['share'] = comparison_by_dim[self.metric] / comparison_revenue
+        comparison_volume = self.comparison_df[volume_col].sum() if volume_col in self.comparison_df.columns else 0
+        comparison_price = comparison_revenue / comparison_volume if comparison_volume > 0 else 0
 
-            # Merge to align dimensions
-            merged = pd.merge(
-                actual_by_dim[[mix_dimension, self.metric, volume_col, 'price', 'share']],
-                comparison_by_dim[[mix_dimension, self.metric, volume_col, 'price', 'share']],
-                on=mix_dimension,
-                how='outer',
-                suffixes=('_actual', '_comparison')
-            ).fillna(0)
-
-            # Calculate PVM components by dimension
-            comparison_total_volume = comparison_by_dim[volume_col].sum()
-            actual_total_volume = actual_by_dim[volume_col].sum()
-
-            # Volume: Change in total volume at comparison prices/mix
-            volume_impact = (actual_total_volume - comparison_total_volume) * (comparison_revenue / comparison_total_volume if comparison_total_volume > 0 else 0)
-
-            # Mix: Change in product mix at comparison prices
-            mix_impact = 0
-            for _, row in merged.iterrows():
-                share_change = row['share_actual'] - row['share_comparison']
-                mix_impact += share_change * comparison_revenue
-
-            # Price: Change in prices at actual volumes
-            price_impact = total_variance - volume_impact - mix_impact
-
-            logger.info(f"Dimensional PVM - Dimension: {mix_dimension}, Categories: {len(merged)}")
-
-        else:
-            # Fallback to simple aggregate calculation
-            logger.info("Using simple aggregate PVM calculation (mix dimension not available)")
-
-            actual_volume = self.actuals_df[volume_col].sum() if volume_col in self.actuals_df.columns else 0
-            actual_price = actual_revenue / actual_volume if actual_volume > 0 else 0
-
-            comparison_volume = self.comparison_df[volume_col].sum() if volume_col in self.comparison_df.columns else 0
-            comparison_price = comparison_revenue / comparison_volume if comparison_volume > 0 else 0
-
-            # Calculate impacts
-            volume_impact = (actual_volume - comparison_volume) * comparison_price
-            price_impact = (actual_price - comparison_price) * actual_volume
-            mix_impact = total_variance - volume_impact - price_impact
+        # Calculate impacts
+        volume_impact = (actual_volume - comparison_volume) * comparison_price
+        price_impact = (actual_price - comparison_price) * actual_volume
+        mix_impact = total_variance - volume_impact - price_impact
 
         logger.info(f"PVM: Volume={volume_impact:,.0f}, Price={price_impact:,.0f}, Mix={mix_impact:,.0f}")
 
@@ -1046,14 +999,21 @@ class FPAVarianceAnalysis:
         }]
 
         # Smart Y-axis: don't start at 0, let Highcharts calculate based on data range
+        # Find min/max values to set appropriate axis range
+        min_val = min(starting_m, ending_m, starting_m + volume_m, starting_m + volume_m + price_m, starting_m + volume_m + price_m + mix_m)
+        max_val = max(starting_m, ending_m, starting_m + volume_m, starting_m + volume_m + price_m, starting_m + volume_m + price_m + mix_m)
+
+        # Add 10% padding
+        padding = (max_val - min_val) * 0.1
+
         return {
             'chart_categories': categories,
             'chart_data': data_series,
             'chart_y_axis': {
                 'title': {'text': metric_display},
                 'labels': {'format': '${value:,.0f}M'},
-                'startOnTick': False,  # Don't force start at tick
-                'endOnTick': False     # Don't force end at tick
+                'min': min_val - padding,
+                'max': max_val + padding
             },
             'chart_title': ''
         }
