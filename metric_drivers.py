@@ -808,19 +808,65 @@ class FPAVarianceAnalysis:
         comparison_revenue = self.comparison_df[self.metric].sum()
         total_variance = actual_revenue - comparison_revenue
 
-        # Simple aggregate PVM calculation
-        logger.info("Using simple aggregate PVM calculation")
+        # Category-level PVM calculation to properly capture mix effects
+        if mix_dimension and volume_col in self.actuals_df.columns:
+            logger.info(f"Using category-level PVM calculation with dimension: {mix_dimension}")
 
-        actual_volume = self.actuals_df[volume_col].sum() if volume_col in self.actuals_df.columns else 0
-        actual_price = actual_revenue / actual_volume if actual_volume > 0 else 0
+            # Aggregate by category
+            actual_by_cat = self.actuals_df.groupby(mix_dimension).agg({
+                self.metric: 'sum',
+                volume_col: 'sum'
+            }).reset_index()
+            actual_by_cat['price'] = actual_by_cat[self.metric] / actual_by_cat[volume_col]
 
-        comparison_volume = self.comparison_df[volume_col].sum() if volume_col in self.comparison_df.columns else 0
-        comparison_price = comparison_revenue / comparison_volume if comparison_volume > 0 else 0
+            comparison_by_cat = self.comparison_df.groupby(mix_dimension).agg({
+                self.metric: 'sum',
+                volume_col: 'sum'
+            }).reset_index()
+            comparison_by_cat['price'] = comparison_by_cat[self.metric] / comparison_by_cat[volume_col]
 
-        # Calculate impacts
-        volume_impact = (actual_volume - comparison_volume) * comparison_price
-        price_impact = (actual_price - comparison_price) * actual_volume
-        mix_impact = total_variance - volume_impact - price_impact
+            # Merge to align categories
+            merged = pd.merge(
+                actual_by_cat,
+                comparison_by_cat,
+                on=mix_dimension,
+                how='outer',
+                suffixes=('_actual', '_comparison')
+            ).fillna(0)
+
+            # Calculate PVM components by category then sum
+            volume_impact = 0
+            price_impact = 0
+            mix_impact = 0
+
+            for _, row in merged.iterrows():
+                # Volume effect: change in volume at comparison price
+                vol_delta = row[f'{volume_col}_actual'] - row[f'{volume_col}_comparison']
+                volume_impact += vol_delta * row['price_comparison']
+
+                # Price effect: change in price at actual volume
+                price_delta = row['price_actual'] - row['price_comparison']
+                price_impact += price_delta * row[f'{volume_col}_actual']
+
+            # Mix is the residual
+            mix_impact = total_variance - volume_impact - price_impact
+
+            logger.info(f"Category-level PVM - Dimension: {mix_dimension}, Categories: {len(merged)}")
+
+        else:
+            # Fallback to simple aggregate calculation
+            logger.info("Using simple aggregate PVM calculation")
+
+            actual_volume = self.actuals_df[volume_col].sum() if volume_col in self.actuals_df.columns else 0
+            actual_price = actual_revenue / actual_volume if actual_volume > 0 else 0
+
+            comparison_volume = self.comparison_df[volume_col].sum() if volume_col in self.comparison_df.columns else 0
+            comparison_price = comparison_revenue / comparison_volume if comparison_volume > 0 else 0
+
+            # Calculate impacts using standard PVM formula
+            volume_impact = (actual_volume - comparison_volume) * comparison_price
+            price_impact = (actual_price - comparison_price) * actual_volume
+            mix_impact = total_variance - volume_impact - price_impact
 
         logger.info(f"PVM: Volume={volume_impact:,.0f}, Price={price_impact:,.0f}, Mix={mix_impact:,.0f}")
 
@@ -1082,8 +1128,18 @@ class FPAVarianceAnalysis:
         for display_name, metric_col, is_currency in metrics_to_show:
             # Get actual and comparison values for this metric
             if metric_col in self.actuals_df.columns and metric_col in self.comparison_df.columns:
-                actual_value = self.actuals_df[metric_col].sum()
-                comparison_value = self.comparison_df[metric_col].sum()
+                # Special handling for Price - calculate weighted average, not sum
+                if display_name == '  Price':
+                    actual_gross_rev = self.actuals_df['gross_revenue'].sum()
+                    actual_volume = self.actuals_df['units_carton'].sum()
+                    comparison_gross_rev = self.comparison_df['gross_revenue'].sum()
+                    comparison_volume = self.comparison_df['units_carton'].sum()
+
+                    actual_value = actual_gross_rev / actual_volume if actual_volume > 0 else 0
+                    comparison_value = comparison_gross_rev / comparison_volume if comparison_volume > 0 else 0
+                else:
+                    actual_value = self.actuals_df[metric_col].sum()
+                    comparison_value = self.comparison_df[metric_col].sum()
 
                 # For Brand Contribution Margin %, calculate percentage of gross revenue
                 if display_name == '  Brand Contribution Margin %':
