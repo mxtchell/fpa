@@ -139,38 +139,6 @@ WHATIF_LAYOUT = """{
                 "extraStyles": "border-radius: 8px"
             },
             {
-                "name": "Markdown0",
-                "type": "Markdown",
-                "children": "",
-                "text": "Analysis insights will appear here...",
-                "style": {
-                    "fontSize": "16px",
-                    "color": "#000000",
-                    "border": "none"
-                },
-                "parentId": "FlexContainer0",
-                "label": "Markdown-insights"
-            },
-            {
-                "name": "FlexContainer0",
-                "type": "FlexContainer",
-                "children": "",
-                "minHeight": "250px",
-                "style": {
-                    "borderRadius": "11.911px",
-                    "box-shadow": "0px 0px 8.785px 0px rgba(0, 0, 0, 0.10) inset",
-                    "padding": "10px",
-                    "fontFamily": "Arial",
-                    "backgroundColor": "#edf2f7",
-                    "border-left": "4px solid #3b82f6"
-                },
-                "direction": "column",
-                "hidden": false,
-                "label": "FlexContainer-Insights",
-                "extraStyles": "border-radius: 8px;",
-                "flex": "1 1 250px"
-            },
-            {
                 "name": "DataTable0",
                 "type": "DataTable",
                 "children": "",
@@ -225,17 +193,6 @@ WHATIF_LAYOUT = """{
                 {
                     "elementName": "HighchartsChart0",
                     "fieldName": "options.series"
-                }
-            ]
-        },
-        {
-            "name": "exec_summary",
-            "isRequired": false,
-            "defaultValue": null,
-            "targets": [
-                {
-                    "elementName": "Markdown0",
-                    "fieldName": "text"
                 }
             ]
         },
@@ -421,7 +378,6 @@ Use a professional finance tone. Be concise (3-4 sentences).
         "chart_title": "COGS: Forecasted vs Estimated",
         "chart_categories": chart_data['categories'],
         "chart_data_series": chart_data['series'],
-        "exec_summary": insights,
         "data": table_data['data'],
         "col_defs": table_data['columns']
     }
