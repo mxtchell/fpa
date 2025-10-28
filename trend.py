@@ -238,7 +238,7 @@ def apply_fpa_formatting(charts):
                     if isinstance(axis, dict):
                         axis['labels'] = axis.get('labels', {})
                         # Use formatter function to add M suffix
-                        axis['labels']['formatter'] = "function() { return '$' + Highcharts.numberFormat(this.value, 1) + 'M'; }"
+                        axis['labels']['formatter'] = """function() { return '$' + Highcharts.numberFormat(this.value, 1) + 'M'; }"""
 
                 logger.info(f"Y-axis after: {y_axis}")
 
