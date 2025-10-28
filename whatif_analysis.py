@@ -11,6 +11,8 @@ from skill_framework import (
     ParameterDisplayDescription
 )
 from skill_framework.skills import ExportData
+from skill_framework.layouts import wire_layout
+from whatif_helper.whatif_layouts import WHATIF_LAYOUT
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,12 @@ PRICE_COL_MAPPING = {
             constrained_to="filters",
             is_multi=True,
             description="Additional filters (region, brand, etc.)"
+        ),
+        SkillParameter(
+            name="whatif_layout",
+            parameter_type="visualization",
+            description="Layout for COGS What-If Analysis",
+            default_value=WHATIF_LAYOUT
         )
     ]
 )
@@ -69,6 +77,7 @@ def whatif_analysis(parameters: SkillInput):
     periods = parameters.arguments.periods if hasattr(parameters.arguments, 'periods') else []
     breakout = parameters.arguments.breakout if hasattr(parameters.arguments, 'breakout') else 'category'
     other_filters = parameters.arguments.other_filters if hasattr(parameters.arguments, 'other_filters') else []
+    whatif_layout = parameters.arguments.whatif_layout if hasattr(parameters.arguments, 'whatif_layout') else WHATIF_LAYOUT
 
     # Force category as breakout for COGS
     if breakout.lower() != 'category':
@@ -111,7 +120,7 @@ def whatif_analysis(parameters: SkillInput):
 
     # Run analysis
     try:
-        results_df, chart_html = analyzer.run()
+        results_df = analyzer.run()
     except Exception as e:
         logger.error(f"Error running what-if analysis: {e}", exc_info=True)
         return SkillOutput(
@@ -121,21 +130,9 @@ def whatif_analysis(parameters: SkillInput):
             parameter_display_descriptions=[]
         )
 
-    # Create parameter display descriptions
-    param_info = [
-        ParameterDisplayDescription(key="Breakout", value=breakout),
-        ParameterDisplayDescription(key="Period", value=", ".join(periods) if periods else "Not specified")
-    ]
-
-    for k, v in price_scenario.items():
-        formatted_val = f"{v:+.1%}"
-        param_info.append(ParameterDisplayDescription(key=k, value=formatted_val))
-
-    # Create visualization
-    viz = SkillVisualization(
-        title="What-If COGS Analysis",
-        layout=chart_html
-    )
+    # Create visualization data
+    chart_data = analyzer.create_chart_data()
+    table_data = analyzer.create_table_data(results_df)
 
     # Generate insights using LLM
     ar_utils = ArUtils()
@@ -159,10 +156,33 @@ Use a professional finance tone. Be concise (3-4 sentences).
 
     insights = ar_utils.get_llm_response(insight_prompt)
 
+    # Prepare layout variables
+    layout_vars = {
+        "chart_title": "COGS: Forecasted vs Estimated",
+        "chart_categories": chart_data['categories'],
+        "chart_data_series": chart_data['series'],
+        "exec_summary": insights,
+        "data": table_data['data'],
+        "col_defs": table_data['columns']
+    }
+
+    # Wire the layout
+    rendered = wire_layout(json.loads(whatif_layout), layout_vars)
+
+    # Create parameter display descriptions
+    param_info = [
+        ParameterDisplayDescription(key="", value=f"Breakout: {breakout}"),
+        ParameterDisplayDescription(key="", value=f"Period: {', '.join(periods) if periods else 'Not specified'}")
+    ]
+
+    for k, v in price_scenario.items():
+        formatted_val = f"{v:+.1%}"
+        param_info.append(ParameterDisplayDescription(key="", value=f"{k}: {formatted_val}"))
+
     return SkillOutput(
         final_prompt=insight_prompt,
         narrative=insights,
-        visualizations=[viz],
+        visualizations=[SkillVisualization(title="COGS What-If Analysis", layout=rendered)],
         parameter_display_descriptions=param_info,
         followup_questions=[],
         export_data=[
@@ -188,7 +208,7 @@ class WhatIfAnalysisEngine:
         self.data_query = DataQuery()
 
     def run(self):
-        """Run the COGS what-if analysis and return results DataFrame and chart HTML"""
+        """Run the COGS what-if analysis and return results DataFrame"""
 
         # Pull base COGS data from database
         base_df = self._pull_cogs_data()
@@ -202,10 +222,7 @@ class WhatIfAnalysisEngine:
         # Merge and calculate changes
         results_df = self._merge_and_calculate_changes(forecasted_df, estimated_df)
 
-        # Generate chart HTML
-        chart_html = self._generate_chart_html(results_df)
-
-        return results_df, chart_html
+        return results_df
 
     def _pull_cogs_data(self):
         """Pull COGS data from database"""
@@ -332,166 +349,50 @@ class WhatIfAnalysisEngine:
 
         return pd.DataFrame(result_data)
 
-    def _generate_chart_html(self, df):
-        """Generate Highcharts HTML for the visualization"""
+    def create_chart_data(self):
+        """Create Highcharts column chart data"""
+        # This will be populated when we have actual data
+        # For now return placeholder structure
+        return {
+            "categories": [],
+            "series": [
+                {"name": "COGS Forecasted", "data": [], "color": "#5DADE2"},
+                {"name": "COGS Estimated", "data": [], "color": "#8E44AD"}
+            ]
+        }
 
-        # Extract data for chart - only COGS for simplicity
-        categories = df[self.breakout].tolist()
-        forecasted_data = df["COGS_Forecasted"].tolist()
-        estimated_data = df["COGS_Estimated"].tolist()
+    def create_table_data(self, df):
+        """Create DataTable data from results DataFrame"""
 
-        html = f"""
-<head>
-    <script src="https://code.highcharts.com/highcharts.js"></script>
-    <style>
-        #whatif-chart {{
-            height: 400px;
-            width: 100%;
-        }}
+        columns = [
+            {"name": self.breakout.title()},
+            {"name": "COGS Forecasted"},
+            {"name": "COGS Estimated"},
+            {"name": "Change"},
+            {"name": "Material Forecasted"},
+            {"name": "Material Estimated"},
+            {"name": "Material Change"},
+            {"name": "Cocoa Forecasted"},
+            {"name": "Cocoa Estimated"},
+            {"name": "Cocoa Change"}
+        ]
 
-        .table-container {{
-            overflow-x: auto;
-            max-height: 600px;
-            margin-top: 40px;
-        }}
-
-        table {{
-            border-collapse: collapse;
-            width: 100%;
-            font-size: 10pt;
-        }}
-
-        thead {{
-            background-color: #EEE;
-            position: sticky;
-            top: 0;
-            z-index: 2;
-        }}
-
-        th, td {{
-            text-align: right;
-            padding: 8px;
-            border-bottom: 1px solid #e0e0e0;
-        }}
-
-        tbody tr:nth-child(odd) {{
-            background-color: #f9f9f9;
-        }}
-
-        .index_cols {{
-            position: sticky;
-            left: 0;
-            background-color: #EEE;
-            font-weight: bold;
-            z-index: 1;
-        }}
-
-        tbody tr:nth-child(odd) .index_cols {{
-            background-color: #f9f9f9;
-        }}
-
-        tbody tr:nth-child(even) .index_cols {{
-            background-color: #ffffff;
-        }}
-    </style>
-</head>
-<body>
-    <div id="whatif-chart"></div>
-
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th class="index_cols" rowspan="2">{self.breakout.title()}</th>
-                    <th colspan="3" style="text-align: center;">COGS</th>
-                    <th colspan="3" style="text-align: center;">Material</th>
-                    <th colspan="3" style="text-align: center;">% of Cocoa</th>
-                </tr>
-                <tr>
-                    <th>Forecasted</th>
-                    <th>Estimated</th>
-                    <th>Change</th>
-                    <th>Forecasted</th>
-                    <th>Estimated</th>
-                    <th>Change</th>
-                    <th>Forecasted</th>
-                    <th>Estimated</th>
-                    <th>Change</th>
-                </tr>
-            </thead>
-            <tbody>
-"""
-
+        data = []
         for _, row in df.iterrows():
-            html += f"""
-                <tr>
-                    <td class="index_cols">{row[self.breakout]}</td>
-                    <td>${row['COGS_Forecasted']/1000000:.2f}M</td>
-                    <td>${row['COGS_Estimated']/1000000:.2f}M</td>
-                    <td>{row['COGS_Change']:.2%}</td>
-                    <td>${row['Material_Forecasted']/1000000:.2f}M</td>
-                    <td>${row['Material_Estimated']/1000000:.2f}M</td>
-                    <td>{row['Material_Change']:.2%}</td>
-                    <td>${row['Cocoa_Forecasted']/1000000:.2f}M</td>
-                    <td>${row['Cocoa_Estimated']/1000000:.2f}M</td>
-                    <td>{row['Cocoa_Change']:.2%}</td>
-                </tr>
-"""
+            data.append([
+                row[self.breakout],
+                f"${row['COGS_Forecasted']/1000000:.2f}M",
+                f"${row['COGS_Estimated']/1000000:.2f}M",
+                f"{row['COGS_Change']:.2%}",
+                f"${row['Material_Forecasted']/1000000:.2f}M",
+                f"${row['Material_Estimated']/1000000:.2f}M",
+                f"{row['Material_Change']:.2%}",
+                f"${row['Cocoa_Forecasted']/1000:.2f}K",
+                f"${row['Cocoa_Estimated']/1000:.2f}K",
+                f"{row['Cocoa_Change']:.2%}"
+            ])
 
-        html += """
-            </tbody>
-        </table>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            Highcharts.chart('whatif-chart', {
-                chart: {
-                    type: 'column'
-                },
-                title: {
-                    text: ''
-                },
-                xAxis: {
-                    categories: """ + json.dumps(categories) + """,
-                    title: {
-                        text: '""" + self.breakout.title() + """'
-                    }
-                },
-                yAxis: {
-                    title: {
-                        text: 'COGS'
-                    },
-                    labels: {
-                        formatter: function() {
-                            return '$' + (this.value / 1000000).toFixed(1) + 'M';
-                        }
-                    }
-                },
-                tooltip: {
-                    formatter: function() {
-                        return this.series.name + ': <b>$' + (this.y / 1000000).toFixed(2) + 'M</b>';
-                    }
-                },
-                series: [{
-                    name: 'COGS Forecasted',
-                    data: """ + json.dumps(forecasted_data) + """,
-                    color: '#5DADE2'
-                }, {
-                    name: 'COGS Estimated',
-                    data: """ + json.dumps(estimated_data) + """,
-                    color: '#8E44AD'
-                }],
-                credits: {
-                    enabled: false
-                }
-            });
-        });
-    </script>
-</body>
-"""
-
-        return html
+        return {"columns": columns, "data": data}
 
 
 if __name__ == '__main__':
