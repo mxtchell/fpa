@@ -195,12 +195,17 @@ def apply_fpa_formatting(charts):
     large_currency_metrics = ['gross_revenue', 'net_revenue', 'brand_contribution_margin', 'gross_profit']
 
     for chart_name, vars_dict in charts.items():
+        # Try to get metric name from multiple sources
         metric_name = vars_dict.get('absolute_metric_name', '').lower()
+
+        # If absolute_metric_name is empty, try the chart name itself
+        if not metric_name:
+            metric_name = chart_name.lower()
 
         # Check if this is a large currency metric
         use_millions = any(large_metric in metric_name for large_metric in large_currency_metrics)
 
-        logger.info(f"Processing chart: {chart_name}, metric: {metric_name}, use_millions: {use_millions}")
+        logger.info(f"Processing chart: {chart_name}, metric from name: {metric_name}, use_millions: {use_millions}")
         logger.info(f"Chart vars keys: {vars_dict.keys()}")
 
         if use_millions:
