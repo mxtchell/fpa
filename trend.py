@@ -201,58 +201,32 @@ def apply_fpa_formatting(charts):
         use_millions = any(large_metric in metric_name for large_metric in large_currency_metrics)
 
         if use_millions:
-            # Y-axis formatter for millions
-            y_axis_formatter = """
-            function() {
-                return '$' + (this.value / 1000000).toFixed(1) + 'M';
-            }
-            """
-            # Tooltip formatter for millions
-            tooltip_formatter = """
-            function() {
-                var value = '$' + (this.y / 1000000).toFixed(2) + 'M';
-                return '<b>' + this.series.name + '</b><br/>' + this.x + ': ' + value;
-            }
-            """
-        else:
-            # Default formatting
-            y_axis_formatter = """
-            function() {
-                if (Math.abs(this.value) >= 1000000) {
-                    return '$' + (this.value / 1000000).toFixed(1) + 'M';
-                } else if (Math.abs(this.value) >= 1000) {
-                    return '$' + (this.value / 1000).toFixed(1) + 'K';
-                } else {
-                    return '$' + this.value.toLocaleString();
-                }
-            }
-            """
-            tooltip_formatter = """
-            function() {
-                var value;
-                if (Math.abs(this.y) >= 1000000) {
-                    value = '$' + (this.y / 1000000).toFixed(2) + 'M';
-                } else if (Math.abs(this.y) >= 1000) {
-                    value = '$' + (this.y / 1000).toFixed(1) + 'K';
-                } else {
-                    value = '$' + this.y.toLocaleString();
-                }
-                return '<b>' + this.series.name + '</b><br/>' + this.x + ': ' + value;
-            }
-            """
+            # Y-axis format string (not a function)
+            y_axis_format = '${value:,.1f}M'
 
-        # Apply to y-axis
+            # Tooltip uses pointFormat
+            tooltip_format = '<b>{series.name}</b><br/>{point.x}: ${point.y:,.2f}M'
+        else:
+            # Default formatting with auto-scale
+            y_axis_format = '${value:,.0f}'
+            tooltip_format = '<b>{series.name}</b><br/>{point.x}: ${point.y:,.0f}'
+
+        # Apply to y-axis - need to scale values, not just format
         if 'absolute_y_axis' in vars_dict:
             y_axis = vars_dict['absolute_y_axis']
-            if isinstance(y_axis, dict):
+            if isinstance(y_axis, dict) and use_millions:
+                # For millions, we need to transform the data points themselves
+                # The format string alone won't work
                 y_axis['labels'] = y_axis.get('labels', {})
-                y_axis['labels']['formatter'] = y_axis_formatter
+                y_axis['labels']['format'] = y_axis_format
 
-        # Apply to tooltips
-        if 'absolute_series' in vars_dict:
+        # Apply to series data - scale to millions
+        if 'absolute_series' in vars_dict and use_millions:
             for series in vars_dict['absolute_series']:
-                if isinstance(series, dict):
-                    series['tooltip'] = {'pointFormatter': tooltip_formatter}
+                if isinstance(series, dict) and 'data' in series:
+                    # Scale data points to millions
+                    series['data'] = [val / 1_000_000 if val is not None else None for val in series['data']]
+                    series['tooltip'] = {'pointFormat': tooltip_format}
 
     return charts
 
