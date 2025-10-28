@@ -191,8 +191,9 @@ def trend(parameters: SkillInput):
 
 def apply_fpa_formatting(charts):
     """Apply FP&A currency formatting to chart configurations"""
-    # Metrics that should be formatted in millions
-    large_currency_metrics = ['gross_revenue', 'net_revenue', 'brand_contribution_margin', 'gross_profit']
+    # Metrics that should be formatted in millions (with and without underscores)
+    large_currency_metrics = ['gross_revenue', 'gross revenue', 'net_revenue', 'net revenue',
+                              'brand_contribution_margin', 'brand contribution margin', 'gross_profit', 'gross profit']
 
     for chart_name, vars_dict in charts.items():
         # Try to get metric name from multiple sources
