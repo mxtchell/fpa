@@ -226,14 +226,14 @@ def apply_fpa_formatting(charts):
                         scaled_data = series['data'][:3] if len(series['data']) > 3 else series['data']
                         logger.info(f"Scaled data sample: {scaled_data}")
 
-            # Apply to y-axis - simple format with M suffix
+            # Apply to y-axis - add M suffix with formatter function
             if 'absolute_y_axis' in vars_dict:
                 y_axis = vars_dict['absolute_y_axis']
                 logger.info(f"Y-axis before: {y_axis}")
                 if isinstance(y_axis, dict):
                     y_axis['labels'] = y_axis.get('labels', {})
-                    # Highcharts format syntax
-                    y_axis['labels']['format'] = '${value:.1f}M'
+                    # Use formatter function to add M suffix
+                    y_axis['labels']['formatter'] = "function() { return '$' + Highcharts.numberFormat(this.value, 1) + 'M'; }"
                     logger.info(f"Y-axis after: {y_axis}")
 
     return charts
