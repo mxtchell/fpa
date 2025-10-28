@@ -5,7 +5,8 @@ import logging
 import pandas as pd
 import numpy as np
 
-from ar_analytics import ArUtils, DataQuery
+from ar_analytics import ArUtils
+from answer_rocket import AnswerRocketClient
 from skill_framework import (
     SkillVisualization, skill, SkillParameter, SkillInput, SkillOutput,
     ParameterDisplayDescription
@@ -300,7 +301,6 @@ PRICE_COL_MAPPING = {
         ),
         SkillParameter(
             name="price_change_scenario",
-            parameter_type="json",
             description="JSON object with cost changes as decimal percentages. Keys: 'cocoa', 'sugar', 'wheat', 'other_materials' for commodities; 'material', 'labor', 'overheads', 'logistics' for cost components. Example: {'cocoa': 0.05, 'sugar': 0.03} for 5% cocoa and 3% sugar increase."
         ),
         SkillParameter(
@@ -357,8 +357,21 @@ def whatif_analysis(parameters: SkillInput):
             parameter_display_descriptions=[]
         )
 
+    # Get AnswerRocketClient
+    try:
+        client = AnswerRocketClient()
+    except Exception as e:
+        logger.error(f"Failed to initialize AnswerRocketClient: {e}")
+        return SkillOutput(
+            final_prompt=f"Failed to initialize client: {str(e)}",
+            narrative=f"Error: {str(e)}",
+            visualizations=[],
+            parameter_display_descriptions=[]
+        )
+
     # Create analysis engine
     analyzer = WhatIfAnalysisEngine(
+        client=client,
         periods=periods,
         breakout=breakout,
         filters=other_filters,
@@ -441,7 +454,8 @@ Use a professional finance tone. Be concise (3-4 sentences).
 class WhatIfAnalysisEngine:
     """Engine for running COGS what-if scenario analysis"""
 
-    def __init__(self, periods, breakout, filters, price_scenario):
+    def __init__(self, client, periods, breakout, filters, price_scenario):
+        self.client = client
         self.periods = periods
         self.breakout = breakout
         self.filters = filters
@@ -451,8 +465,9 @@ class WhatIfAnalysisEngine:
         self.estimated_col = "Estimated"
         self.change_col = "Change"
 
-        # Initialize data query utility
-        self.data_query = DataQuery()
+        # Database constants (same as metric_drivers)
+        self.database_id = "83C2268F-AF77-4D00-8A6B-7181DC06643E"
+        self.dataset_id = "d762aa87-6efb-47c4-b491-3bdc27147d4e"
 
     def run(self):
         """Run the COGS what-if analysis and return results DataFrame"""
@@ -472,26 +487,108 @@ class WhatIfAnalysisEngine:
         return results_df
 
     def _pull_cogs_data(self):
-        """Pull COGS data from database"""
+        """Pull COGS data from database using SQL query"""
 
-        # Build query filters
-        query_filters = []
+        # Build filter clause
+        filter_clauses = []
         for f in self.filters:
-            query_filters.append({
-                "column": f.get("column") or f.get("col"),
-                "operator": f.get("operator") or f.get("op", "="),
-                "value": f.get("value") or f.get("val")
-            })
+            dim = f.get('dim') or f.get('col')
+            op = f.get('op', '=')
+            val = f.get('val')
 
-        # Query COGS by category
-        df = self.data_query.query(
-            metrics=["cogs"],
-            dimensions=[self.breakout],
-            filters=query_filters,
-            date_filter=self.periods[0] if self.periods else None
+            if dim and val:
+                if isinstance(val, list):
+                    if len(val) == 1:
+                        filter_clauses.append(f"UPPER({dim}) {op} UPPER('{val[0]}')")
+                    else:
+                        val_str = ", ".join([f"UPPER('{v}')" for v in val])
+                        filter_clauses.append(f"UPPER({dim}) IN ({val_str})")
+                elif isinstance(val, str):
+                    filter_clauses.append(f"UPPER({dim}) {op} UPPER('{val}')")
+                else:
+                    filter_clauses.append(f"{dim} {op} {val}")
+
+        filter_clause = " AND " + " AND ".join(filter_clauses) if filter_clauses else ""
+
+        # Parse period to date range (using same logic as metric_drivers)
+        if self.periods and len(self.periods) > 0:
+            period_str = self.periods[0]
+            start_date, end_date = self._parse_period_to_date_range(period_str)
+            logger.info(f"Parsed period '{period_str}' to date range: {start_date} to {end_date}")
+        else:
+            raise ValueError("Period is required but was not provided")
+
+        # Query COGS by category for actuals only
+        query = f"""
+        SELECT {self.breakout}, SUM(cogs) as cogs
+        FROM read_csv('gartner.csv')
+        WHERE scenario = 'actuals'
+        AND end_date BETWEEN '{start_date}' AND '{end_date}'
+        {filter_clause}
+        GROUP BY {self.breakout}
+        """
+
+        logger.info(f"COGS query: {query}")
+        result = self.client.data.execute_sql_query(
+            database_id=self.database_id,
+            sql_query=query,
+            row_limit=10000
         )
 
+        df = result.df if hasattr(result, 'df') else None
+        if df is None or df.empty:
+            raise ValueError(f"No COGS data found for period {self.periods[0]}")
+
         return df
+
+    def _parse_period_to_date_range(self, period_str):
+        """Convert period string to date range for SQL query"""
+        from dateutil.parser import parse
+
+        if not period_str:
+            raise ValueError("Period is required but was not provided")
+
+        period_lower = period_str.lower().strip()
+
+        # Handle quarters (Q1 2024, Q2 2025, etc.)
+        if period_lower.startswith('q'):
+            parts = period_str.split()
+            quarter = int(parts[0][1])  # Extract quarter number
+            year = int(parts[1])
+
+            quarter_map = {
+                1: ('01-01', '03-31'),
+                2: ('04-01', '06-30'),
+                3: ('07-01', '09-30'),
+                4: ('10-01', '12-31')
+            }
+            start_month_day, end_month_day = quarter_map[quarter]
+            return f"{year}-{start_month_day}", f"{year}-{end_month_day}"
+
+        # Handle single months (January 2025, Jan 2025, 2025-01, etc.)
+        try:
+            parsed_date = parse(period_str, fuzzy=True)
+            year = parsed_date.year
+            month = parsed_date.month
+
+            # Get last day of month
+            if month == 12:
+                last_day = 31
+            elif month in [4, 6, 9, 11]:
+                last_day = 30
+            elif month == 2:
+                # Check for leap year
+                if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+                    last_day = 29
+                else:
+                    last_day = 28
+            else:
+                last_day = 31
+
+            return f"{year}-{month:02d}-01", f"{year}-{month:02d}-{last_day}"
+        except:
+            # If can't parse, return as-is
+            return period_str, period_str
 
     def _get_cogs_breakdown(self):
         """Get COGS breakdown percentages by category"""
