@@ -218,8 +218,11 @@ def apply_fpa_formatting(charts):
                     if isinstance(series, dict) and 'data' in series:
                         original_data = series['data'][:3] if len(series['data']) > 3 else series['data']
                         logger.info(f"Original data sample: {original_data}")
-                        # Scale data points to millions
-                        series['data'] = [val / 1_000_000 if val is not None else None for val in series['data']]
+                        # Scale data points to millions - handle both numbers and None/strings
+                        series['data'] = [
+                            val / 1_000_000 if val is not None and isinstance(val, (int, float)) else val
+                            for val in series['data']
+                        ]
                         scaled_data = series['data'][:3] if len(series['data']) > 3 else series['data']
                         logger.info(f"Scaled data sample: {scaled_data}")
 
