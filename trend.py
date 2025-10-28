@@ -230,11 +230,17 @@ def apply_fpa_formatting(charts):
             if 'absolute_y_axis' in vars_dict:
                 y_axis = vars_dict['absolute_y_axis']
                 logger.info(f"Y-axis before: {y_axis}")
-                if isinstance(y_axis, dict):
-                    y_axis['labels'] = y_axis.get('labels', {})
-                    # Use formatter function to add M suffix
-                    y_axis['labels']['formatter'] = "function() { return '$' + Highcharts.numberFormat(this.value, 1) + 'M'; }"
-                    logger.info(f"Y-axis after: {y_axis}")
+
+                # Y-axis might be a list or a dict
+                y_axes = y_axis if isinstance(y_axis, list) else [y_axis]
+
+                for axis in y_axes:
+                    if isinstance(axis, dict):
+                        axis['labels'] = axis.get('labels', {})
+                        # Use formatter function to add M suffix
+                        axis['labels']['formatter'] = "function() { return '$' + Highcharts.numberFormat(this.value, 1) + 'M'; }"
+
+                logger.info(f"Y-axis after: {y_axis}")
 
     return charts
 
