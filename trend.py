@@ -226,7 +226,7 @@ def apply_fpa_formatting(charts):
                         scaled_data = series['data'][:3] if len(series['data']) > 3 else series['data']
                         logger.info(f"Scaled data sample: {scaled_data}")
 
-            # Apply to y-axis - add M suffix with formatter function
+            # Apply to y-axis - modify format string to add M suffix
             if 'absolute_y_axis' in vars_dict:
                 y_axis = vars_dict['absolute_y_axis']
                 logger.info(f"Y-axis before: {y_axis}")
@@ -237,8 +237,11 @@ def apply_fpa_formatting(charts):
                 for axis in y_axes:
                     if isinstance(axis, dict):
                         axis['labels'] = axis.get('labels', {})
-                        # Use formatter function to add M suffix
-                        axis['labels']['formatter'] = """function() { return '$' + Highcharts.numberFormat(this.value, 1) + 'M'; }"""
+                        # Just modify the format string to add M suffix - simpler approach
+                        # Change ${value:,.2f} to ${value:,.1f}M
+                        current_format = axis['labels'].get('format', '${value:,.2f}')
+                        # Replace the closing } with M and then }
+                        axis['labels']['format'] = '${value:,.1f}M'
 
                 logger.info(f"Y-axis after: {y_axis}")
 
