@@ -834,22 +834,26 @@ class FPAVarianceAnalysis:
                 suffixes=('_actual', '_comparison')
             ).fillna(0)
 
-            # Calculate PVM components by category then sum
-            volume_impact = 0
-            price_impact = 0
+            # Calculate total volumes
+            total_actual_volume = actual_by_cat[volume_col].sum()
+            total_comparison_volume = comparison_by_cat[volume_col].sum()
+
+            # Step 1: Calculate Mix first - change in category shares at comparison prices
             mix_impact = 0
-
             for _, row in merged.iterrows():
-                # Volume effect: change in volume at comparison price
-                vol_delta = row[f'{volume_col}_actual'] - row[f'{volume_col}_comparison']
-                volume_impact += vol_delta * row['price_comparison']
+                actual_share = row[f'{volume_col}_actual'] / total_actual_volume if total_actual_volume > 0 else 0
+                comparison_share = row[f'{volume_col}_comparison'] / total_comparison_volume if total_comparison_volume > 0 else 0
+                share_change = actual_share - comparison_share
 
-                # Price effect: change in price at actual volume
-                price_delta = row['price_actual'] - row['price_comparison']
-                price_impact += price_delta * row[f'{volume_col}_actual']
+                # Mix = share change × comparison price × actual total volume
+                mix_impact += share_change * row['price_comparison'] * total_actual_volume
 
-            # Mix is the residual
-            mix_impact = total_variance - volume_impact - price_impact
+            # Step 2: Calculate Volume - total volume change at comparison average price
+            comparison_avg_price = comparison_revenue / total_comparison_volume if total_comparison_volume > 0 else 0
+            volume_impact = (total_actual_volume - total_comparison_volume) * comparison_avg_price
+
+            # Step 3: Price is residual
+            price_impact = total_variance - volume_impact - mix_impact
 
             logger.info(f"Category-level PVM - Dimension: {mix_dimension}, Categories: {len(merged)}")
 
