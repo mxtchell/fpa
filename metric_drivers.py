@@ -1324,7 +1324,7 @@ def metric_drivers(parameters: SkillInput):
     # HARDCODED: Always show these 5 breakout dimensions
     breakout_dimensions = ['category', 'region_l2', 'country', 'customer_type', 'market_type_1']
 
-    top_n = getattr(parameters.arguments, 'top_n', 10)
+    top_n = int(getattr(parameters.arguments, 'top_n', 10) or 10)
     other_filters = getattr(parameters.arguments, 'other_filters', [])
     max_prompt = getattr(parameters.arguments, 'max_prompt', DEFAULT_MAX_PROMPT)
     insight_prompt = getattr(parameters.arguments, 'insight_prompt', DEFAULT_INSIGHT_PROMPT)
