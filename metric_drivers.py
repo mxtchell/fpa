@@ -710,7 +710,7 @@ class FPAVarianceAnalysis:
         # Query actuals
         actuals_query = f"""
         SELECT *
-        FROM read_csv('gartner.csv')
+        FROM read_csv('gartner_dates_shifted_to_2026.csv')
         WHERE scenario = 'actuals'
         AND end_date BETWEEN '{start_date}' AND '{end_date}'
         {filter_clause}
@@ -738,7 +738,7 @@ class FPAVarianceAnalysis:
 
             comparison_query = f"""
             SELECT *
-            FROM read_csv('gartner.csv')
+            FROM read_csv('gartner_dates_shifted_to_2026.csv')
             WHERE scenario = 'actuals'
             AND end_date BETWEEN '{prior_start}' AND '{prior_end}'
             {filter_clause}
@@ -749,7 +749,7 @@ class FPAVarianceAnalysis:
             comparison_scenario = self.get_comparison_scenario()
             comparison_query = f"""
             SELECT *
-            FROM read_csv('gartner.csv')
+            FROM read_csv('gartner_dates_shifted_to_2026.csv')
             WHERE scenario = '{comparison_scenario}'
             AND end_date BETWEEN '{start_date}' AND '{end_date}'
             {filter_clause}

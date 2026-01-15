@@ -477,7 +477,7 @@ class WhatIfAnalysisEngine:
         # Query COGS by category for actuals only
         query = f"""
         SELECT {self.breakout}, SUM(cogs) as cogs
-        FROM read_csv('gartner.csv')
+        FROM read_csv('gartner_dates_shifted_to_2026.csv')
         WHERE scenario = 'actuals'
         AND end_date BETWEEN '{start_date}' AND '{end_date}'
         {filter_clause}
