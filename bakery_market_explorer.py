@@ -450,11 +450,13 @@ def load_document_sources():
                     # Format: [{"File": "doc.pdf", "Chunks": [{"Text": "...", "Page": 1}]}]
                     for processed_file in resource_contents:
                         file_name = processed_file.get("File", "unknown_file")
+                        drive_file_id = processed_file.get("DriveFileId", "")
                         chunks = processed_file.get("Chunks", [])
                         logger.info(f"DEBUG: Processing file '{file_name}' with {len(chunks)} chunks")
                         for chunk in chunks:
                             res = {
                                 "file_name": file_name,
+                                "drive_file_id": drive_file_id,
                                 "text": chunk.get("Text", ""),
                                 "description": str(chunk.get("Text", ""))[:200] + "..." if len(str(chunk.get("Text", ""))) > 200 else str(chunk.get("Text", "")),
                                 "chunk_index": chunk.get("Page", 1),
@@ -534,9 +536,12 @@ def find_matching_documents(user_question, topics, loaded_sources, base_url, max
                 source_copy = source.copy()
                 source_copy['match_score'] = score
 
-                # Generate URL for document
-                doc_id = "97da127f-c557-4ade-acd4-a44ef7804aa9"
-                source_copy['url'] = f"{base_url}/{doc_id}#page={source_copy['chunk_index']}"
+                # Generate URL for document - prefer Google Drive if available
+                if source_copy.get('drive_file_id'):
+                    source_copy['url'] = f"https://drive.google.com/file/d/{source_copy['drive_file_id']}/view#page={source_copy['chunk_index']}"
+                else:
+                    doc_id = "97da127f-c557-4ade-acd4-a44ef7804aa9"
+                    source_copy['url'] = f"{base_url}/{doc_id}#page={source_copy['chunk_index']}"
                 scored_sources.append(source_copy)
 
         logger.info(f"DEBUG: {len(scored_sources)} documents passed threshold")
@@ -773,9 +778,12 @@ def generate_rag_response(user_question, docs):
         logger.info(f"DEBUG: Generating thumbnail for reference {i+1}: {doc.file_name} page {doc.chunk_index}")
         thumbnail_base64 = get_pdf_thumbnail(pack_file_path, doc.file_name, doc.chunk_index, 120, 160)
 
-        # Generate knowledge base URL
-        doc_id = "97da127f-c557-4ade-acd4-a44ef7804aa9"
-        doc.url = f"https://maxdemo.staging.answerrocket.com/apps/system/knowledge-base/{doc_id}#page={doc.chunk_index}"
+        # Generate URL - prefer Google Drive if available
+        if hasattr(doc, 'drive_file_id') and doc.drive_file_id:
+            doc.url = f"https://drive.google.com/file/d/{doc.drive_file_id}/view#page={doc.chunk_index}"
+        else:
+            doc_id = "97da127f-c557-4ade-acd4-a44ef7804aa9"
+            doc.url = f"https://maxdemo.staging.answerrocket.com/apps/system/knowledge-base/{doc_id}#page={doc.chunk_index}"
 
         ref = {
             'number': i + 1,
